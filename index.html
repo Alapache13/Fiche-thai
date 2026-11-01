@@ -82,6 +82,8 @@
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:rgba(28,28,30,.92);color:#fff;
     padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%)}
+  #dbg{display:none;position:fixed;left:8px;bottom:8px;margin:0;padding:6px 8px;background:rgba(0,0,0,.78);color:#9ef59e;
+    font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;z-index:70;pointer-events:none;max-width:90vw}
 </style>
 </head>
 <body>
@@ -115,6 +117,7 @@
 </div>
 <div id="modal"><div class="mbox"></div></div>
 <div id="toast"></div>
+<pre id="dbg"></pre>
 
 <script>
 (()=>{
@@ -153,6 +156,14 @@ let undoStack=[], redoStack=[];
 let seq=0; const nextId=()=>Date.now()*100+((seq++)%100);
 
 const $=id=>document.getElementById(id);
+let diag=false; const dlines=[]; let dlast=0;
+function dlog(e,tag){
+  if(!diag) return;
+  const t=Math.round(e.timeStamp);
+  dlines.push(tag+" "+e.pointerType+"#"+e.pointerId+" b"+e.buttons+" p"+(e.pressure||0).toFixed(2)+" actif="+(active?1:0)+" +"+(t-dlast)+"ms");
+  dlast=t; if(dlines.length>8) dlines.shift();
+  $("dbg").textContent=dlines.join("\n");
+}
 const el=(t,c,x)=>{const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;};
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const r1=v=>Math.round(v*10)/10;
@@ -480,8 +491,9 @@ function onDown(e){
   const cv=e.target.closest&&e.target.closest("canvas.cv"); if(!cv) return;
   stopInertia();
   const rec=recMap.get(cv); if(!rec) return;
+  dlog(e,"down");
   if(e.pointerType==="touch"&&(active||S.fingerMode!=="draw")){ if(!active) startTouch(e); return; }
-  if(active) return;
+  if(active) endActive();   // trait précédent resté « ouvert » : on le termine puis on enchaîne
   if(e.pointerType==="mouse"&&e.button!==0) return;
   e.preventDefault();
   if(rec.cmp){toast("Vue de comparaison : lecture seule");return;}
@@ -495,17 +507,27 @@ function onDown(e){
 function onMove(e){
   if(e.pointerType==="touch"&&touches.has(e.pointerId)){touchMove(e);return;}
   if(active&&e.pointerId===active.id){
+    if(e.pointerType!=="touch"&&e.buttons===0&&e.pressure===0){dlog(e,"fin(survol)");endActive();return;}
     e.preventDefault();
     if(active.kind==="stroke") strokeMove(e); else eraseAt(e);
   }
 }
-function onUp(e){
-  if(touches.has(e.pointerId)){endTouch(e);return;}
-  if(active&&e.pointerId===active.id){
-    if(active.kind==="stroke") finishStroke(); else finishErase();
-    active=null;
-  }
+function endActive(){
+  if(!active) return;
+  const a=active; active=null;
+  try{ active=a; if(a.kind==="stroke") finishStroke(); else finishErase(); }
+  catch(err){console.error("fin de trait",err);}
+  finally{active=null;}
 }
+function onUp(e){
+  if(active&&e.pointerId===active.id){dlog(e,"up");endActive();return;}
+  if(touches.has(e.pointerId)) endTouch(e);
+}
+// filets de sécurité : la fin du geste est captée même si l'événement n'arrive pas sur la feuille
+const safeEnd=e=>{if(active&&e.pointerId===active.id){dlog(e,e.type);endActive();}};
+window.addEventListener("pointerup",safeEnd,true);
+window.addEventListener("pointercancel",safeEnd,true);
+sc.addEventListener("lostpointercapture",safeEnd);
 sc.addEventListener("pointerdown",onDown,{passive:false});
 sc.addEventListener("pointermove",onMove,{passive:false});
 sc.addEventListener("pointerup",onUp);
@@ -766,6 +788,9 @@ function openMenu(){
     btn("− Dernière ligne",()=>{closeModal();removeLastRow();}),
     btn("Vider la feuille",()=>{closeModal(); if(confirm("Vider toute la feuille ? (annulable avec ↶)"))clearSheet();},false,"bad")
   ]);
+  sec("Diagnostic",[
+    btn("Diagnostic du stylet : "+(diag?"oui":"non"),()=>{diag=!diag;dlines.length=0;$("dbg").textContent="";$("dbg").style.display=diag?"block":"none";reopen();},diag)
+  ]);
   sec("Données",[
     btn("📤 Exporter (JSON)",()=>{closeModal();exportJSON();}),
     btn("🖼 Exporter en image",()=>{closeModal();exportPNG();}),
@@ -773,7 +798,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent=last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 5.1 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
