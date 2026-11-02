@@ -157,13 +157,13 @@ let seq=0; const nextId=()=>Date.now()*100+((seq++)%100);
 
 const $=id=>document.getElementById(id);
 let diag=false; const dlines=[]; let dlast=0;
-function dlogRaw(t){ if(!diag) return; dlines.push(t); if(dlines.length>8) dlines.shift(); $("dbg").textContent=dlines.join("\n"); }
+function dlogRaw(t){ if(!diag) return; dlines.push(t); if(dlines.length>10) dlines.shift(); $("dbg").textContent=dlines.join("\n"); }
 (()=>{let hb=performance.now(); setInterval(()=>{const n=performance.now(),gap=n-hb-100; hb=n; if(gap>120) dlogRaw("⚠ gel de l'écran "+Math.round(gap)+" ms");},100);})();
 function dlog(e,tag){
   if(!diag) return;
   const t=Math.round(e.timeStamp);
   dlines.push(tag+" "+e.pointerType+"#"+e.pointerId+" b"+e.buttons+" p"+(e.pressure||0).toFixed(2)+" actif="+(active?1:0)+" +"+(t-dlast)+"ms");
-  dlast=t; if(dlines.length>8) dlines.shift();
+  dlast=t; if(dlines.length>10) dlines.shift();
   $("dbg").textContent=dlines.join("\n");
 }
 const el=(t,c,x)=>{const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;};
@@ -240,10 +240,11 @@ function setSave(state){
 function markDirty(sh,keys){ // keys absent = feuille entière ; tableau = seulement ces cellules (+ infos de la feuille)
   let d=dirty.get(sh.id); if(!d){d={full:false,keys:new Set()};dirty.set(sh.id,d);}
   if(keys===undefined) d.full=true; else keys.forEach(k=>d.keys.add(k));
-  setSave("busy"); clearTimeout(saveT); saveT=setTimeout(flush,600);
+  setSave("busy"); clearTimeout(saveT); saveT=setTimeout(flush,3000);
 }
-async function flush(){
+async function flush(force){
   clearTimeout(saveT); if(!dirty.size) return;
+  if(active&&force!==true){saveT=setTimeout(flush,800);return;}
   const batch=[...dirty.entries()]; dirty.clear();
   const t0=performance.now(); let nCells=0;
   try{
@@ -276,7 +277,7 @@ function saveMeta(){
 }
 
 /* ═══════════════ dessin ═══════════════ */
-const widthAt=(base,p)=>base*(0.45+1.1*p);
+const widthAt=(base,p)=>base*(0.8+0.7*Math.min(p,1));
 
 function segPath(ctx,d,i,n){
   const x=d[3*i],y=d[3*i+1]; let sx,sy,ex,ey;
@@ -324,6 +325,9 @@ function redrawCell(rec){
     paintCell(ctx,cur.cells[rec.key],lw,S.rowH,{guides:S.guides,px,color:COL_A});
     paintCell(ctx,cur.cells[ck(rec.cmp,rec.row)],lw,S.rowH,{guides:false,px,color:COL_B});
   }else paintCell(ctx,cur.cells[rec.key],lw,S.rowH,{guides:S.guides,px});
+  if(active&&active.kind==="stroke"&&active.rec===rec){
+    const c=cur.cells[rec.key]; if(!c||!c.s.includes(active.st)) drawStroke(ctx,active.st,active.st.c);
+  }
 }
 function layoutCell(rec){
   const w=colLW(rec)*Z,h=S.rowH*Z,dpr=Math.min(window.devicePixelRatio||1,3);
@@ -339,6 +343,7 @@ function redrawKeys(keys){
   for(const r of recs){if(set.has(r.key)||(r.cmp&&set.has(ck(r.cmp,r.row)))) redrawCell(r);}
 }
 function applySizes(){
+  dlogRaw("redessin complet");
   for(const h of hdrs) h.el.style.width=(h.w()*Z)+"px";
   for(const g of guts) g.el.style.height=(S.rowH*Z)+"px";
   for(const r of recs) layoutCell(r);
@@ -360,7 +365,7 @@ function fit(){
   for(const ws of viewBands(VIEWS[S.view])){
     const sum=ws.reduce((a,b)=>a+b,0); z=Math.min(z,(avail-ws.length*4)/sum);
   }
-  Z=clamp(Math.floor(z*100)/100,.35,2.2); zoomMode="fit"; applySizes();
+  Z=clamp(Math.floor(z*100)/100,.35,2.2); zoomMode="fit"; lastFitW=sc.clientWidth; applySizes();
 }
 function setZoom(z,ax,ay){
   const zo=Z; Z=clamp(Math.round(z*100)/100,.35,2.6); zoomMode="manual"; applySizes();
@@ -584,7 +589,7 @@ sc.addEventListener("pointercancel",onUp);
 function beginStroke(e,cv,rec){
   const lw=colLW(rec),ctx=rec.ctx;
   ctx.setTransform(cv.width/lw,0,0,cv.height/S.rowH,0,0);
-  active={kind:"stroke",id:e.pointerId,rec,lw,r:cv.getBoundingClientRect(),pp:.5,
+  active={kind:"stroke",id:e.pointerId,rec,lw,r:cv.getBoundingClientRect(),pp:.5,t0:performance.now(),ne:0,
     st:{c:S.color,w:S.width,d:[],i:nextId()}};
   addPt(active,e);
 }
@@ -600,7 +605,8 @@ function addPt(a,ev){
     const dx=x-d[3*n-3],dy=y-d[3*n-2]; if(dx*dx+dy*dy<.12) return;
     p=a.pp*.55+p*.45;
   }
-  a.pp=p; d.push(x,y,Math.round(p*100)/100);
+  a.pp=p; a.ne++; a.pmin=a.pmin===undefined?p:Math.min(a.pmin,p); a.pmax=a.pmax===undefined?p:Math.max(a.pmax,p);
+  d.push(x,y,Math.round(p*100)/100);
   const m=d.length/3,ctx=rec.ctx;
   ctx.strokeStyle=st.c;ctx.fillStyle=st.c;ctx.lineCap="round";ctx.lineJoin="round";
   if(m===1){ctx.beginPath();ctx.arc(x,y,widthAt(st.w,d[2])/2,0,6.2832);ctx.fill();}
@@ -609,9 +615,11 @@ function addPt(a,ev){
 function finishStroke(){
   const a=active,st=a.st,d=st.d,n=d.length/3,rec=a.rec;
   if(!n) return;
+  dlogRaw("trait "+n+" pts, "+Math.round(performance.now()-a.t0)+" ms, pression "+(a.pmin||0).toFixed(2)+"–"+(a.pmax||0).toFixed(2));
   if(n>1){const ctx=rec.ctx;ctx.strokeStyle=st.c;ctx.lineCap="round";ctx.lineWidth=widthAt(st.w,d[3*n-1]);segPath(ctx,d,n-1,n);}
   const sh=cur,key=rec.key;
   cellOf(sh,key,true).s.push(st);
+  redrawCell(rec);
   pushOp({sh,keys:[key],
     undo(){const c=sh.cells[key]; if(c){const i=c.s.indexOf(st); if(i>=0)c.s.splice(i,1); pruneCell(sh,key);} redrawKeys([key]);},
     redo(){const c=cellOf(sh,key,true); if(!c.s.includes(st)){c.s.push(st);sortCell(c);} redrawKeys([key]);}});
@@ -715,7 +723,7 @@ function setView(i){
 }
 function switchSheet(id){
   const sh=sheets.find(s=>s.id===id); if(!sh||sh===cur) return;
-  flush(); cur=sh; S.sheet=id; undoStack=[]; redoStack=[]; revealed.clear(); saveMeta(); rebuild(false); fillSheetSelect();
+  flush(true); cur=sh; S.sheet=id; undoStack=[]; redoStack=[]; revealed.clear(); saveMeta(); rebuild(false); fillSheetSelect();
 }
 function addRows(k){cur.nRows=Math.min(60,cur.nRows+k); markDirty(cur,[]); rebuild(false);}
 function removeLastRow(){
@@ -752,10 +760,14 @@ document.addEventListener("keydown",e=>{
 ["gesturestart","gesturechange"].forEach(t=>document.addEventListener(t,e=>e.preventDefault()));
 document.addEventListener("contextmenu",e=>e.preventDefault());
 document.addEventListener("selectstart",e=>{if(!(e.target.closest&&e.target.closest("input,textarea")))e.preventDefault();});
-let rzT=null;
-window.addEventListener("resize",()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(zoomMode==="fit")fit();},150);});
-document.addEventListener("visibilitychange",()=>{if(document.hidden)flush();});
-window.addEventListener("pagehide",flush);
+let rzT=null,lastFitW=0;
+const doFit=()=>{
+  if(active){rzT=setTimeout(doFit,400);return;}
+  if(zoomMode==="fit"&&sc.clientWidth!==lastFitW){dlogRaw("resize → ajustement");fit();}
+};
+window.addEventListener("resize",()=>{clearTimeout(rzT);rzT=setTimeout(doFit,150);});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)flush(true);});
+window.addEventListener("pagehide",()=>flush(true));
 
 /* ═══════════════ modales ═══════════════ */
 function openModal(title,body,actions){
@@ -845,7 +857,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 5.2 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 5.3 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
