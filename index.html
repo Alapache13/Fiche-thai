@@ -810,8 +810,8 @@ $("modal").addEventListener("pointerdown",e=>{if(e.target===$("modal"))closeModa
 function openRowModal(r){
   const info=cur.rows[r]||{};
   const body=el("div"); body.style.display="contents";
-  const ta=document.createElement("textarea"); ta.rows=2; ta.lang="th"; ta.value=info.ref||""; ta.placeholder="Texte thaï (clavier thaï)";
-  const fr=document.createElement("input"); fr.type="text"; fr.lang="fr"; fr.value=info.fr||""; fr.placeholder="Traduction française";
+  const ta=document.createElement("textarea"); ta.rows=2; ta.lang="th"; ta.setAttribute("autocorrect","off");ta.setAttribute("autocomplete","off");ta.setAttribute("autocapitalize","off");ta.spellcheck=false; ta.value=info.ref||""; ta.placeholder="Texte thaï (clavier thaï)";
+  const fr=document.createElement("input"); fr.type="text"; fr.lang="fr"; fr.setAttribute("autocorrect","off");fr.setAttribute("autocomplete","off");fr.setAttribute("autocapitalize","off");fr.spellcheck=false; fr.value=info.fr||""; fr.placeholder="Traduction française";
   fr.style.cssText="width:100%;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:10px";
   body.append(el("p",null,"Le thaï sert à la voix 🔊 et aux cartes de révision, le français à leur réponse. Entrée dans le champ français : ligne suivante."),
     el("div","sec","Thaï"),ta,el("div","sec","Français"),fr);
@@ -914,7 +914,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 5.8 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 5.9 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))

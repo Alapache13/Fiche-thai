@@ -1886,6 +1886,8 @@ function buildPrefixExercise(item) {
 
   init();
 })();
+
+document.querySelectorAll('textarea,input[type=text]').forEach(e=>{if(e.id==='exportArea')return;e.setAttribute('autocorrect','off');e.setAttribute('autocomplete','off');e.setAttribute('autocapitalize','off');e.spellcheck=false;});
 </script>
 </body>
 </html>
