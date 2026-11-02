@@ -42,7 +42,7 @@
   #bMenu.alert::after{content:"";position:absolute;top:5px;right:5px;width:9px;height:9px;border-radius:50%;background:var(--bad)}
 
   /* ---------- feuille ---------- */
-  #sheet{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;padding:10px;position:relative}
+  #sheet{flex:1;min-height:0;overflow:auto;padding:10px;position:relative}
   #stage{display:inline-flex;flex-direction:column;gap:18px;min-width:min-content;transform-origin:0 0}
   .band{display:flex;flex-direction:column;gap:4px}
   .brow{display:flex;align-items:stretch;gap:4px}
@@ -60,9 +60,9 @@
   .rsz{position:absolute;top:0;bottom:0;right:-10px;width:20px;z-index:3;cursor:col-resize;touch-action:none}
   .rsz::before{content:"";position:absolute;left:8px;top:6px;bottom:6px;width:4px;border-radius:2px;background:#c4c8d2}
   .rsz.drag::before,.rsz:hover::before{background:var(--acc)}
-  .cell{flex:none;position:relative;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 0 0 1px var(--line)}
-  canvas.cv{display:block;touch-action:none}
-  .mask{position:absolute;inset:0;background:#e9e9ef;display:none;align-items:center;justify-content:center;
+  .cell{flex:none;position:relative;border-radius:8px;box-shadow:0 0 0 1px var(--line)}
+  canvas.cv{display:block;touch-action:none;background:#fff;border-radius:8px}
+  .mask{position:absolute;inset:0;border-radius:8px;background:#e9e9ef;display:none;align-items:center;justify-content:center;
     color:var(--mut);font-size:13px;touch-action:pan-x pan-y;cursor:pointer}
   .addrow{align-self:flex-start;margin-left:calc(var(--gut) + 4px)}
 
@@ -429,6 +429,7 @@ function buildStage(){
       const row=el("div","brow"); row.appendChild(makeGut(r));
       for(const col of cols){
         const wrap=el("div","cell"); const cv=document.createElement("canvas"); cv.className="cv"; wrap.appendChild(cv);
+        ["touchstart","touchmove"].forEach(t=>cv.addEventListener(t,ev=>{if(ev.cancelable)ev.preventDefault();},{passive:false}));
         const rec={el:cv,wrap,ctx:cv.getContext("2d"),col,row:r,key:ck(col,r),cmp:v.cmp?v.cmp[1]:null,answer:!!(v.pair&&col===v.pair[1]),mask:null};
         if(rec.answer){
           const m=el("div","mask","👁 Touche pour révéler"); m.onclick=()=>revealRow(r); wrap.appendChild(m); rec.mask=m;
@@ -612,6 +613,15 @@ function addPt(a,ev){
   if(m===1){ctx.beginPath();ctx.arc(x,y,widthAt(st.w,d[2])/2,0,6.2832);ctx.fill();}
   else{ctx.lineWidth=widthAt(st.w,d[3*(m-2)+2]);segPath(ctx,d,m-2,m);}
 }
+function inkNear(rec,d,n,lw){
+  try{
+    const cv=rec.el,sx=cv.width/lw,sy=cv.height/S.rowH,mi=Math.floor(n/2),w=6;
+    const x0=clamp(Math.round(d[3*mi]*sx)-w,0,cv.width-1),y0=clamp(Math.round(d[3*mi+1]*sy)-w,0,cv.height-1);
+    const im=rec.ctx.getImageData(x0,y0,Math.max(1,Math.min(2*w,cv.width-x0)),Math.max(1,Math.min(2*w,cv.height-y0))).data;
+    for(let i=0;i<im.length;i+=4) if(im[i+3]>200&&Math.min(im[i],im[i+1],im[i+2])<130) return "oui";
+    return "NON";
+  }catch(e){return "?";}
+}
 function finishStroke(){
   const a=active,st=a.st,d=st.d,n=d.length/3,rec=a.rec;
   if(!n) return;
@@ -619,7 +629,9 @@ function finishStroke(){
   if(n>1){const ctx=rec.ctx;ctx.strokeStyle=st.c;ctx.lineCap="round";ctx.lineWidth=widthAt(st.w,d[3*n-1]);segPath(ctx,d,n-1,n);}
   const sh=cur,key=rec.key;
   cellOf(sh,key,true).s.push(st);
+  const inkLive=diag?inkNear(rec,d,n,a.lw):"";
   redrawCell(rec);
+  if(diag) dlogRaw("encre dans la case : tracé direct "+inkLive+" / après redessin "+inkNear(rec,d,n,a.lw));
   pushOp({sh,keys:[key],
     undo(){const c=sh.cells[key]; if(c){const i=c.s.indexOf(st); if(i>=0)c.s.splice(i,1); pruneCell(sh,key);} redrawKeys([key]);},
     redo(){const c=cellOf(sh,key,true); if(!c.s.includes(st)){c.s.push(st);sortCell(c);} redrawKeys([key]);}});
@@ -857,7 +869,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 5.3 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 5.4 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
