@@ -1,0 +1,1891 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🇹🇭 Révision thaï</title>
+<style>
+:root{
+  --bg:#0f1115;--card:#1a1d23;--card-2:#23272f;--text:#e8eaed;--muted:#9aa0a6;
+  --accent:#4f8cff;--ok:#2ecc71;--ko:#e74c3c;--border:#2c313a;--warn:#f39c12;
+  --gold:#f1c40f;--purple:#9b59b6;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.5;padding-bottom:3rem}
+header{display:flex;justify-content:space-between;align-items:center;
+  padding:.75rem 1rem;border-bottom:1px solid var(--border);background:var(--card);
+  position:sticky;top:0;z-index:10;flex-wrap:wrap;gap:.5rem}
+header h1{font-size:1.05rem;margin:0}
+.stats{display:flex;gap:.75rem;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
+main{max-width:720px;margin:0 auto;padding:1rem}
+
+.tabs{display:flex;gap:.3rem;margin-bottom:.75rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tab{background:transparent;border:none;border-bottom:2px solid transparent;
+  padding:.5rem .8rem;cursor:pointer;color:var(--muted);font-size:.85rem}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+
+.controls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:1rem}
+.controls label{display:flex;gap:.3rem;align-items:center;font-size:.85rem}
+select,textarea,button,input[type=text]{font:inherit;color:inherit}
+select,input[type=text]{background:var(--card-2);border:1px solid var(--border);
+  border-radius:8px;padding:.35rem .5rem;font-size:.85rem}
+button{background:var(--card-2);border:1px solid var(--border);border-radius:8px;
+  padding:.5rem .8rem;cursor:pointer;transition:background .15s;font-size:.9rem}
+button:hover:not(:disabled){background:#2d323c}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+button.ko{background:var(--ko);border-color:var(--ko);color:#fff}
+button.tiny{padding:.25rem .5rem;font-size:.8rem}
+button.gold{background:var(--gold);border-color:var(--gold);color:#000}
+button.purple{background:var(--purple);border-color:var(--purple);color:#fff}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:1rem;margin-bottom:1rem}
+.card.hidden,.hidden{display:none}
+.meta{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.75rem}
+.badge{font-size:.7rem;padding:.15rem .5rem;border-radius:999px;background:var(--accent);color:#fff}
+.badge-light{background:var(--card-2);color:var(--muted)}
+.badge-box{background:var(--gold);color:#000}
+.badge-mode{background:var(--purple);color:#fff}
+.prompt-label{color:var(--muted);font-size:.8rem;margin:0 0 .25rem}
+.prompt{font-size:1.15rem;margin:0 0 .75rem}
+.speaker{font-size:.85rem;color:var(--accent);margin:0 0 .25rem;font-weight:600}
+
+.blankLine{font-size:1.4rem;font-family:"Noto Sans Thai",system-ui,sans-serif;
+  margin:.75rem 0;padding:.6rem .8rem;background:var(--card-2);border-radius:8px;
+  letter-spacing:.02em;line-height:1.8;word-break:break-word}
+.blankLine .fixed{color:var(--text)}
+.blankLine .blank{color:var(--accent);border-bottom:2px dashed var(--accent);
+  padding:0 .3rem;font-weight:600}
+.blankLine .filled{color:var(--ok);font-weight:600}
+
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:.5rem;margin:.75rem 0}
+.choice{background:var(--card-2);border:1px solid var(--border);border-radius:8px;
+  padding:.7rem .5rem;cursor:pointer;font-family:"Noto Sans Thai",system-ui,sans-serif;
+  font-size:1.2rem;text-align:center;transition:all .15s;color:var(--text)}
+.choice:hover:not(:disabled){background:#2d323c;border-color:var(--accent)}
+.choice:disabled{cursor:not-allowed}
+.choice.correct{background:var(--ok);border-color:var(--ok);color:#fff}
+.choice.wrong{background:var(--ko);border-color:var(--ko);color:#fff;text-decoration:line-through}
+.choice.dimmed{opacity:.4}
+
+.prefixBox{font-size:1.3rem;font-family:"Noto Sans Thai",system-ui,sans-serif;
+  margin:.75rem 0;padding:.6rem .8rem;background:var(--card-2);border-radius:8px;
+  line-height:1.8}
+.prefixBox .known{color:var(--text)}
+.prefixBox .toComplete{color:var(--muted);font-style:italic;font-size:.95rem;
+  font-family:system-ui,sans-serif}
+.prefixBox .filled{color:var(--ok);font-weight:600}
+
+textarea{width:100%;background:var(--card-2);border:1px solid var(--border);border-radius:8px;
+  padding:.6rem;resize:vertical;font-family:"Noto Sans Thai",system-ui,sans-serif;
+  font-size:1.05rem;min-height:60px}
+.actions{display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap}
+.correction h2{font-size:.8rem;color:var(--muted);margin:0 0 .4rem;
+  text-transform:uppercase;letter-spacing:.05em}
+.correction .thai{font-size:1.35rem;margin:0 0 .25rem;
+  font-family:"Noto Sans Thai",system-ui,sans-serif;word-break:break-word}
+.correction .rom{color:var(--accent);margin:0 0 .25rem;font-style:italic;font-size:.95rem}
+.correction .fr{color:var(--muted);margin:0 0 .5rem;font-size:.95rem}
+.correction .note{background:var(--card-2);border-left:3px solid var(--accent);
+  padding:.5rem .7rem;border-radius:6px;font-size:.85rem;margin:.5rem 0}
+.correction .expl{background:rgba(155,89,182,.12);border-left:3px solid var(--purple);
+  padding:.5rem .7rem;border-radius:6px;font-size:.85rem;margin:.5rem 0}
+.slots{font-size:.8rem;color:var(--muted);margin:.4rem 0}
+.slots code{background:var(--card-2);padding:.1rem .3rem;border-radius:4px}
+.self-eval{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-top:.75rem;
+  padding-top:.75rem;border-top:1px solid var(--border)}
+.self-eval p{margin:0;flex:1 1 100%;color:var(--muted);font-size:.85rem}
+.verdict{font-size:.95rem;font-weight:600;margin:0 0 .5rem}
+.verdict.ok{color:var(--ok)}
+.verdict.ko{color:var(--ko)}
+.verdict.warn{color:var(--warn)}
+
+.keyboard{margin-top:.6rem;padding:.6rem;background:var(--card-2);
+  border-radius:8px;display:none}
+.keyboard.open{display:block}
+.kb-row{display:flex;flex-wrap:wrap;gap:.25rem;margin-bottom:.25rem}
+.kb-key{background:var(--card);border:1px solid var(--border);border-radius:6px;
+  padding:.35rem .55rem;font-size:1rem;cursor:pointer;
+  font-family:"Noto Sans Thai",sans-serif;min-width:2.2rem;text-align:center}
+.kb-key:active{background:var(--accent);color:#fff}
+.kb-label{font-size:.75rem;color:var(--muted);margin:.3rem 0 .15rem}
+
+.statsTable{width:100%;border-collapse:collapse;font-size:.8rem}
+.statsTable th,.statsTable td{padding:.4rem .5rem;border-bottom:1px solid var(--border);text-align:left}
+.statsTable th{color:var(--muted);font-weight:500}
+.statsTable tr:hover{background:var(--card-2)}
+.box-indicator{display:inline-block;width:1.4rem;height:1.4rem;line-height:1.4rem;
+  text-align:center;border-radius:50%;background:var(--card-2);font-size:.75rem}
+.box-1{background:#7f8c8d;color:#fff}
+.box-2{background:#95a5a6;color:#fff}
+.box-3{background:#f39c12;color:#fff}
+.box-4{background:#27ae60;color:#fff}
+.box-5{background:#f1c40f;color:#000}
+
+.structureBox{background:var(--card-2);border-radius:8px;padding:.75rem;margin:.5rem 0}
+.structureMoule{font-size:1.3rem;font-family:"Noto Sans Thai",sans-serif;
+  color:var(--gold);text-align:center;margin:.5rem 0}
+.structureInput{width:100%;background:var(--card);border:1px solid var(--border);
+  border-radius:6px;padding:.5rem;margin:.3rem 0;font-family:"Noto Sans Thai",sans-serif;
+  font-size:1rem;color:var(--text)}
+
+@media (max-width:520px){
+  header{flex-direction:column;align-items:flex-start;gap:.25rem}
+  .stats{font-size:.7rem;gap:.4rem}
+  .prompt{font-size:1.05rem}
+  .correction .thai{font-size:1.2rem}
+  .blankLine,.prefixBox{font-size:1.15rem}
+  .choice{font-size:1.05rem;padding:.55rem .4rem}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🇹🇭 Révision thaï</h1>
+  <div class="stats">
+    <span id="score">Score : 0 / 0</span>
+    <span id="progress">—</span>
+    <span id="dueCount">—</span>
+  </div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab active" data-tab="practice">📚 Réviser</button>
+    <button class="tab" data-tab="stats">📊 Statistiques</button>
+    <button class="tab" data-tab="tools">⚙ Outils</button>
+  </div>
+
+  <!-- ═══════════ ONGLET RÉVISION ═══════════ -->
+  <div id="tab-practice">
+    <section class="controls">
+      <label>Scénario :
+        <select id="scenarioSelect"></select>
+      </label>
+      <label>Mode :
+        <select id="modeSelect">
+          <option value="ordre">Dans l'ordre</option>
+          <option value="aleatoire">Aléatoire</option>
+          <option value="replique">Réplique-réponse</option>
+          <option value="structure">Structure</option>
+          <option value="orthographe">🔤 Orthographe</option>
+        </select>
+      </label>
+      <label id="orthoVariantLabel" style="display:none">Variante :
+        <select id="orthoVariant">
+          <option value="auto">Auto</option>
+          <option value="trou">Trou unique</option>
+          <option value="choix">Choix de graphie</option>
+          <option value="amorce">Amorce donnée</option>
+        </select>
+      </label>
+      <label>
+        <input type="checkbox" id="dueOnly"> À réviser
+      </label>
+      <button id="kbToggle" class="tiny">⌨ Thaï</button>
+    </section>
+
+    <!-- Carte question (modes normaux) -->
+    <section class="card" id="questionCard">
+      <div class="meta">
+        <span id="metaScenario" class="badge"></span>
+        <span id="metaSousScenario" class="badge badge-light"></span>
+        <span id="metaRegistre" class="badge badge-light"></span>
+        <span id="metaBox" class="badge badge-box">Boîte 1</span>
+      </div>
+      <p class="speaker" id="speaker"></p>
+      <p class="prompt-label" id="promptLabel">Que dites-vous en thaï ?</p>
+      <p class="prompt" id="promptFr">—</p>
+      <textarea id="answerInput" rows="3" placeholder="Écrivez en thaï ou en translittération…"></textarea>
+
+      <div class="keyboard" id="keyboard">
+        <div class="kb-label">Consonnes</div>
+        <div class="kb-row" id="kbConsonnes"></div>
+        <div class="kb-label">Voyelles / signes</div>
+        <div class="kb-row" id="kbVoyelles"></div>
+        <div class="kb-label">Chiffres</div>
+        <div class="kb-row" id="kbChiffres"></div>
+        <div class="kb-row">
+          <button class="kb-key" data-kb=" ">␣</button>
+          <button class="kb-key" data-kb="BACK">⌫</button>
+          <button class="kb-key" data-kb="CLEAR">✕</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="checkBtn" class="primary">✔ Vérifier</button>
+        <button id="showBtn">👁 Voir</button>
+        <button id="markBtn" class="gold">★ À revoir demain</button>
+        <button id="nextBtn" disabled>Suivant →</button>
+      </div>
+    </section>
+
+    <!-- Carte orthographe -->
+    <section class="card hidden" id="orthoCard">
+      <div class="meta">
+        <span id="orthoScenario" class="badge"></span>
+        <span class="badge badge-mode" id="orthoTypeBadge">Trou unique</span>
+        <span id="orthoBox" class="badge badge-box">Boîte 1</span>
+      </div>
+      <p class="prompt-label" id="orthoInstruction">Complétez la phrase :</p>
+      <p class="prompt" id="orthoFr" style="font-size:.95rem;color:var(--muted)"></p>
+
+      <div id="orthoBlankZone" class="hidden">
+        <div class="blankLine" id="blankLine"></div>
+        <input type="text" id="blankInput" class="structureInput"
+               placeholder="Tapez uniquement le mot manquant…"
+               style="font-size:1.2rem;text-align:center"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+      </div>
+
+      <div id="orthoChoiceZone" class="hidden">
+        <div class="blankLine" id="choiceLine"></div>
+        <div class="choices" id="choices"></div>
+      </div>
+
+      <div id="orthoPrefixZone" class="hidden">
+        <div class="prefixBox" id="prefixBox"></div>
+        <textarea id="prefixInput" rows="2"
+                  placeholder="Complétez la fin de la phrase…"
+                  autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+      </div>
+
+      <div class="keyboard" id="keyboard2">
+        <div class="kb-label">Consonnes</div>
+        <div class="kb-row" id="kbConsonnes2"></div>
+        <div class="kb-label">Voyelles / signes</div>
+        <div class="kb-row" id="kbVoyelles2"></div>
+        <div class="kb-label">Chiffres</div>
+        <div class="kb-row" id="kbChiffres2"></div>
+        <div class="kb-row">
+          <button class="kb-key" data-kb=" ">␣</button>
+          <button class="kb-key" data-kb="BACK">⌫</button>
+          <button class="kb-key" data-kb="CLEAR">✕</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="orthoCheckBtn" class="primary">✔ Vérifier</button>
+        <button id="orthoShowBtn">👁 Voir</button>
+        <button id="orthoMarkBtn" class="gold">★ À revoir demain</button>
+        <button id="orthoNextBtn" disabled>Suivant →</button>
+      </div>
+    </section>
+
+    <!-- Carte structure -->
+    <section class="card hidden" id="structureCard">
+      <div class="meta"><span class="badge badge-mode">Mode Structure</span></div>
+      <p class="prompt-label">Produis 3 phrases avec cette structure :</p>
+      <div class="structureBox">
+        <div class="structureMoule" id="structMoule">…ได้ไหม</div>
+        <p style="font-size:.85rem;color:var(--muted);margin:.5rem 0 .3rem" id="structExpl"></p>
+        <p style="font-size:.85rem;color:var(--muted);margin:.5rem 0 .3rem" id="structEx"></p>
+      </div>
+      <input type="text" class="structureInput" placeholder="Phrase 1…" id="struct1">
+      <input type="text" class="structureInput" placeholder="Phrase 2…" id="struct2">
+      <input type="text" class="structureInput" placeholder="Phrase 3…" id="struct3">
+      <div class="actions">
+        <button id="structNext" class="primary">Suivante →</button>
+      </div>
+    </section>
+
+    <!-- Correction -->
+    <section class="card hidden" id="correction">
+      <h2 id="corrHeader">Réponse modèle</h2>
+      <p class="verdict" id="verdict"></p>
+      <p class="thai" id="corrThai"></p>
+      <button id="speakBtn" class="tiny" type="button">🔊 Écouter</button>
+      <p class="rom" id="corrRom"></p>
+      <p class="fr" id="corrFr"></p>
+      <div id="corrSlots" class="slots"></div>
+      <p class="note" id="corrNote"></p>
+      <div class="expl" id="corrExpl" style="display:none"></div>
+      <div class="self-eval" id="selfEval">
+        <p>Tu as dit la bonne phrase à voix haute ?</p>
+        <button class="ok" id="evalOk">✔ Juste</button>
+        <button class="ko" id="evalKo">✘ À revoir</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ═══════════ ONGLET STATS ═══════════ -->
+  <div id="tab-stats" class="hidden">
+    <section class="card">
+      <h2 style="margin-top:0;font-size:1rem">Résumé global</h2>
+      <div id="globalStats"></div>
+    </section>
+    <section class="card">
+      <h2 style="margin-top:0;font-size:1rem">Détail par phrase</h2>
+      <div style="overflow-x:auto">
+        <table class="statsTable" id="detailStats">
+          <thead>
+            <tr><th>Boîte</th><th>Phrase (FR)</th><th>✔</th><th>✘</th><th>Vu</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ═══════════ ONGLET OUTILS ═══════════ -->
+  <div id="tab-tools" class="hidden">
+    <section class="card">
+      <h2 style="margin-top:0;font-size:1rem">✍️ Cartes de la fiche d'écriture</h2>
+      <p id="ficheStatus" style="font-size:.85rem;color:var(--muted);margin:.25rem 0 .75rem">—</p>
+      <div class="actions">
+        <button id="ficheSyncBtn" class="primary">🔄 Mettre à jour depuis la fiche</button>
+        <button id="ficheFileBtn">📥 Importer un fichier de la fiche</button>
+        <input type="file" id="ficheFile" accept=".json,application/json" style="display:none">
+      </div>
+      <p style="font-size:.75rem;color:var(--muted);margin:.75rem 0 0">Les lignes de la fiche dont le thaï et le français sont tapés deviennent des cartes (scénario « fiche »). Celles marquées ✗ repartent en boîte 1 et sont à revoir tout de suite.</p>
+    </section>
+    <section class="card">
+      <h2 style="margin-top:0;font-size:1rem">Export / Import</h2>
+      <div class="actions">
+        <button id="exportBtn" class="primary">📤 Exporter</button>
+        <button id="importBtn">📥 Importer</button>
+        <input type="file" id="importFile" accept=".json" style="display:none">
+      </div>
+      <textarea id="exportArea" rows="6" placeholder="JSON ici…"
+        style="margin-top:.75rem;font-size:.75rem"></textarea>
+      <p id="backupInfo" style="font-size:.8rem;color:var(--muted);margin:.5rem 0 0"></p>
+    </section>
+    <section class="card">
+      <h2 style="margin-top:0;font-size:1rem">Danger</h2>
+      <div class="actions">
+        <button id="resetProgressBtn" class="ko">🗑 Réinitialiser</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   1) BASE DE DONNÉES
+   ═══════════════════════════════════════════════════════════════ */
+const DIALOGUES = [
+  {scenario:"taxi",theme:"Transport",sousScenario:"Monter / destination",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ ไป{{destination}}ได้ไหมครับ",
+   rom:"sà-wàt-dii-khráp bpai-{{destination}}-dâai-mǎi-khráp",
+   fr:"Bonjour, vous pouvez m'emmener à {{destination}} ?",
+   slots:[{cle:"destination",cat:"Nom",theme:"Lieux",exemple:"สนามบินดอนเมือง",
+           exempleRom:"sà-nǎam-bin-dɔɔn-mɯang",exempleFr:"l'aéroport Don Mueang"}],
+   note:"ไป…ได้ไหม = « pouvez-vous aller à… ».",
+   keywords:["ได้ไหม","สนามบิน","ดอนเมือง"]},
+
+  {scenario:"taxi",theme:"Transport",sousScenario:"Monter / destination",tour:2,
+   locuteur:"Chauffeur",registre:"poli/neutre",
+   thai:"ได้ครับ ขึ้นรถได้เลยครับ",
+   rom:"dâai-khráp khɯ̂n-rót-dâai-ləəi-khráp",
+   fr:"D'accord, montez.",slots:[],note:"",
+   keywords:["ขึ้นรถ","ได้เลย"]},
+
+  {scenario:"taxi",theme:"Transport",sousScenario:"Prix & trajet",tour:3,
+   locuteur:"Chauffeur",registre:"poli/neutre",
+   thai:"ไปทางด่วนไหมครับ หรือทางปกติ",
+   rom:"bpai-thaang-dùan-mǎi-khráp rɯ̌ɯ-thaang-bpòk-gà-tì",
+   fr:"On prend la voie express (à péage), ou le chemin normal ?",
+   slots:[],note:"ทางด่วน = voies express urbaines à péage.",
+   keywords:["ทางด่วน","ทางปกติ"]},
+
+  {scenario:"taxi",theme:"Transport",sousScenario:"Arrivée & paiement",tour:17,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"เท่าไหร่ครับ",rom:"thâo-rài-khráp",
+   fr:"Combien ?",slots:[],note:"Question ultra-courte.",
+   keywords:["เท่าไหร่"]},
+
+  {scenario:"taxi",theme:"Transport",sousScenario:"Phrases de survie",tour:13,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"ขอโทษครับ พูดช้าๆ ได้ไหมครับ ผมไม่ค่อยเข้าใจ",
+   rom:"khɔ̌ɔ-thôot-khráp phûut-cháa-cháa-dâai-mǎi-khráp phǒm-mâi-khɔ̂i-khâo-jai",
+   fr:"Désolé, vous pouvez parler plus lentement ? Je ne comprends pas très bien.",
+   slots:[],note:"ช้าๆ = doucement. ไม่ค่อย = pas trop.",
+   keywords:["พูดช้าๆ","ไม่ค่อยเข้าใจ"]},
+
+  {scenario:"marche",theme:"Shopping",sousScenario:"Repérer un stand",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ อันนี้ราคาเท่าไหร่ครับ",
+   rom:"sà-wàt-dii-khráp an-níi raa-khaa thâo-rài khráp",
+   fr:"Bonjour, ça coûte combien ?",slots:[],
+   note:"อันนี้ = ceci.",
+   keywords:["อันนี้","ราคา","เท่าไหร่"]},
+
+  {scenario:"marche",theme:"Shopping",sousScenario:"Négocier le prix",tour:3,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"แพงไปหน่อยครับ ลดได้ไหมครับ",
+   rom:"phɛɛng bpai nɔ̀i khráp lót dâai mǎi khráp",
+   fr:"C'est un peu cher, vous pouvez baisser le prix ?",slots:[],
+   note:"แพงไปหน่อย = un peu trop cher.",
+   keywords:["แพงไปหน่อย","ลด"]},
+
+  {scenario:"marche",theme:"Shopping",sousScenario:"Payer",tour:13,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"มีถุงใส่ให้ไหมครับ",rom:"mii thǔng sài hâi mǎi khráp",
+   fr:"Vous avez un sac pour mettre ça ?",slots:[],
+   note:"ถุง = sac.",
+   keywords:["ถุง","ใส่"]},
+
+  {scenario:"restaurant",theme:"Restauration",sousScenario:"Commander",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ โต๊ะสำหรับสองคนครับ",
+   rom:"sà-wàt-dii-khráp dtó sǎm-ràp sɔ̌ɔng khon khráp",
+   fr:"Bonjour, une table pour deux.",slots:[],
+   note:"โต๊ะ = table.",
+   keywords:["โต๊ะ","สำหรับ","สองคน"]},
+
+  {scenario:"restaurant",theme:"Restauration",sousScenario:"Préférences",tour:7,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"ขอไม่ใส่ผักชีครับ",rom:"khɔ̌ɔ mâi sài phàk-chii khráp",
+   fr:"Sans coriandre, s'il vous plaît.",slots:[],
+   note:"ผักชี = coriandre.",
+   keywords:["ผักชี","ไม่ใส่"]},
+
+  {scenario:"restaurant",theme:"Restauration",sousScenario:"Payer",tour:12,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"เก็บเงินด้วยครับ",rom:"gèp ngən dûai khráp",
+   fr:"L'addition, s'il vous plaît.",slots:[],
+   note:"เก็บเงิน = l'addition.",
+   keywords:["เก็บเงิน"]},
+
+  {scenario:"aeroport",theme:"Transport",sousScenario:"Enregistrement",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ ผมจเช็คอินเที่ยวบินไป{{destination}}ครับ",
+   rom:"sà-wàt-dii-khráp phǒm jà chék-in thîao-bin bpai {{destination}} khráp",
+   fr:"Bonjour, je voudrais enregistrer pour le vol vers {{destination}}.",
+   slots:[{cle:"destination",cat:"Nom",theme:"Lieux",exemple:"เชียงใหม่",
+           exempleRom:"chiiang-mài",exempleFr:"Chiang Mai"}],
+   note:"เช็คอิน = check-in.",
+   keywords:["เช็คอิน","เที่ยวบิน"]},
+
+  {scenario:"hotel",theme:"Hébergement",sousScenario:"Check-in",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ ผมจองห้องไว้ในชื่อ {{nom}} ครับ",
+   rom:"sà-wàt-dii-khráp phǒm jɔɔng hɔ̂ng wái nai chɯ̂ɯ {{nom}} khráp",
+   fr:"Bonjour, j'ai réservé une chambre au nom de {{nom}}.",
+   slots:[{cle:"nom",cat:"Nom propre",theme:"Personne",exemple:"ปิแอร์",
+           exempleRom:"bpi-ɛɛ",exempleFr:"Pierre"}],
+   note:"จอง = réserver.",
+   keywords:["จองห้อง","ในชื่อ"]},
+
+  {scenario:"hotel",theme:"Hébergement",sousScenario:"Demandes",tour:6,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"ขอผ้าเช็ดตัวเพิ่มอีกสองผืนได้ไหมครับ",
+   rom:"khɔ̌ɔ phâa-chét-dtua phə̂əm ìik sɔ̌ɔng phɯ̌n dâai mǎi khráp",
+   fr:"Je peux avoir deux serviettes supplémentaires ?",slots:[],
+   note:"ผ้าเช็ดตัว = serviette.",
+   keywords:["ผ้าเช็ดตัว","เพิ่มอีก"]},
+
+  {scenario:"seven",theme:"Courses",sousScenario:"Chercher un produit",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ น้ำเปล่าอยู่ตรงไหนครับ",
+   rom:"sà-wàt-dii-khráp náam-bplàao yùu dtrong nǎi khráp",
+   fr:"Bonjour, où est l'eau minérale ?",slots:[],
+   note:"อยู่ตรงไหน = c'est où.",
+   keywords:["น้ำเปล่า","ตรงไหน"]},
+
+  {scenario:"massage",theme:"Bien-être",sousScenario:"Choisir",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ มีนวดอะไรบ้างครับ",
+   rom:"sà-wàt-dii-khráp mii nûat à-rai bâang khráp",
+   fr:"Bonjour, quels types de massage avez-vous ?",slots:[],
+   note:"นวด = massage.",
+   keywords:["นวด","อะไรบ้าง"]},
+
+  {scenario:"massage",theme:"Bien-être",sousScenario:"Pendant",tour:7,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"แรงไปหน่อยครับ ช่วยเบา ๆ หน่อย",
+   rom:"rɛɛng bpai nɔ̀i khráp chûai bao-bao nɔ̀i",
+   fr:"Un peu trop fort, plus doucement s'il vous plaît.",slots:[],
+   note:"แรงไปหน่อย = trop fort.",
+   keywords:["แรงไปหน่อย","เบา ๆ"]},
+
+  {scenario:"pharmacie",theme:"Santé",sousScenario:"Symptômes",tour:3,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"ปวดหัวครับ มีไข้ด้วย",
+   rom:"bpùat hǔa khráp mii khâi dûai",
+   fr:"J'ai mal à la tête, et de la fièvre aussi.",slots:[],
+   note:"ปวด = avoir mal.",
+   keywords:["ปวดหัว","ไข้"]},
+
+  {scenario:"pharmacie",theme:"Santé",sousScenario:"Symptômes",tour:5,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"ผมแพ้อาหารทะเลครับ",rom:"phǒm phɛ́ɛ aa-hǎan thá-lee khráp",
+   fr:"Je suis allergique aux fruits de mer.",slots:[],
+   note:"แพ้ = allergique.",
+   keywords:["แพ้","อาหารทะเล"]},
+
+  {scenario:"gare_routiere",theme:"Transport",sousScenario:"Billet",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ มีรถไป{{destination}}ไหมครับ",
+   rom:"sà-wàt-dii-khráp mii rót bpai {{destination}} mǎi khráp",
+   fr:"Bonjour, il y a un bus pour {{destination}} ?",
+   slots:[{cle:"destination",cat:"Nom",theme:"Lieux",exemple:"เชียงใหม่",
+           exempleRom:"chiiang-mài",exempleFr:"Chiang Mai"}],
+   note:"รถ = véhicule/bus.",
+   keywords:["มีรถ","ไป"]},
+
+  {scenario:"temple",theme:"Culture",sousScenario:"Règles",tour:1,
+   locuteur:"Visiteur",registre:"poli/neutre",
+   thai:"สวัสดีครับ เข้าวัดต้องแต่งตัวยังไงครับ",
+   rom:"sà-wàt-dii-khráp khâo wát dtɔ̂ng dtɛ̀ɛng-dtua yang-ngai khráp",
+   fr:"Bonjour, comment faut-il s'habiller pour entrer dans le temple ?",
+   slots:[],note:"วัด = temple.",
+   keywords:["เข้าวัด","แต่งตัว"]},
+
+  {scenario:"plage",theme:"Loisirs",sousScenario:"Louer",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ มีร่มกับเก้าอี้ให้เช่าไหมครับ",
+   rom:"sà-wàt-dii-khráp mii rôm gàp gâo-îi hâi châo mǎi khráp",
+   fr:"Bonjour, vous louez des parasols et des chaises ?",slots:[],
+   note:"ร่ม = parasol.",
+   keywords:["ร่ม","เก้าอี้"]},
+
+  {scenario:"scooter",theme:"Transport",sousScenario:"Louer",tour:1,
+   locuteur:"Client",registre:"poli/neutre",
+   thai:"สวัสดีครับ ผมอยากเช่ามอเตอร์ไซค์ครับ",
+   rom:"sà-wàt-dii-khráp phǒm yàak châo mɔɔ-dtəə-sai khráp",
+   fr:"Bonjour, je voudrais louer un scooter.",slots:[],
+   note:"มอเตอร์ไซค์ = scooter.",
+   keywords:["เช่า","มอเตอร์ไซค์"]}
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   2) STRUCTURES PRODUCTIVES
+   ═══════════════════════════════════════════════════════════════ */
+const STRUCTURES = [
+  {moule:"…ได้ไหม", expl:"Puis-je / est-ce possible de… ?",
+   exemple:"ไปสนามบินได้ไหมครับ"},
+  {moule:"ขอ…หน่อย", expl:"Je voudrais… s'il vous plaît",
+   exemple:"ขอน้ำเปล่าหน่อยครับ"},
+  {moule:"ไม่ค่อย…", expl:"Pas très…",
+   exemple:"ไม่ค่อยเข้าใจ"},
+  {moule:"…ไปหน่อย", expl:"Un peu trop…",
+   exemple:"แพงไปหน่อย"},
+  {moule:"…กว่า", expl:"Plus… que (comparatif)",
+   exemple:"เร็วกว่า"},
+  {moule:"มี…ไหม", expl:"Y a-t-il… ?",
+   exemple:"มีถุงไหมครับ"},
+  {moule:"…อยู่ที่ไหน", expl:"Où se trouve… ?",
+   exemple:"ห้องน้ำอยู่ที่ไหน"},
+  {moule:"ช่วย…ให้หน่อย", expl:"Pouvez-vous m'aider à… ?",
+   exemple:"ช่วยเขียนให้หน่อย"},
+  {moule:"ไม่…เลย", expl:"Pas du tout",
+   exemple:"ไม่เผ็ดเลย"}
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   3) GÉNÉRATEURS D'EXERCICES ORTHOGRAPHE
+   ═══════════════════════════════════════════════════════════════ */
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function splitThaiWords(thai) {
+  return thai.split(/\s+/).filter(Boolean);
+}
+
+const MOTS_INTERDITS = new Set([
+  "สวัสดี","ครับ","ค่ะ","คะ","ผม","ฉัน","คุณ","เรา","เขา",
+  "ไป","มา","ได้","ไม่","มี","เป็น","อยู่","จะ","ก็",
+  "และ","หรือ","แต่","กับ","ใน","บน","ที่","นี้","นั้น",
+  "หนึ่ง","สอง","สาม","สี่","ห้า","หก","เจ็ด","แปด","เก้า","สิบ"
+]);
+
+function thaiLength(word) {
+  return Array.from(String(word).normalize("NFC")).filter(c => /[\u0E00-\u0E7F]/.test(c)).length;
+}
+
+let ORTHO_ROTATION = 0;
+
+function pickHiddenWord(item) {
+  const words = splitThaiWords(item.thai);
+  if (!words.length) return 0;
+
+  const candidats = [];
+  words.forEach((w, i) => {
+    const cleaned = w.replace(/[^\u0E00-\u0E7F]/g, "");
+    if (!cleaned) return;
+    if (MOTS_INTERDITS.has(cleaned)) return;
+    if (thaiLength(cleaned) < 3) return;
+    candidats.push({ idx: i, word: cleaned, len: thaiLength(cleaned) });
+  });
+
+  if (!candidats.length) {
+    let best = 0, bestLen = 0;
+    words.forEach((w, i) => {
+      const l = thaiLength(w);
+      if (l > bestLen) { bestLen = l; best = i; }
+    });
+    return best;
+  }
+
+  if (item.keywords && item.keywords.length) {
+    const kb = candidats.filter(c =>
+      item.keywords.some(kw => c.word.includes(kw) || kw.includes(c.word))
+    );
+    if (kb.length) {
+      kb.sort((a,b) => b.len - a.len);
+      const pick = kb[ORTHO_ROTATION % kb.length];
+      ORTHO_ROTATION++;
+      return pick.idx;
+    }
+  }
+
+  candidats.sort((a,b) => b.len - a.len);
+  const maxLen = candidats[0].len;
+  const top = candidats.filter(c => c.len === maxLen);
+  const pick = top[ORTHO_ROTATION % top.length];
+  ORTHO_ROTATION++;
+  return pick.idx;
+}
+
+const THAI_CONSONANTS_SAFE = ["ก","ข","ค","ง","จ","ช","ซ","ด","ต","ท","น","บ","ป","พ","ฟ","ม","ย","ร","ล","ว","ส","ห","อ"];
+
+function generateDistractors(word) {
+  const set = new Set();
+  const chars = Array.from(String(word).normalize("NFC"));
+  
+  // Génération de distracteurs par substitution prudente d'un caractère
+  for (let i = 0; i < chars.length; i++) {
+    if (/[\u0E01-\u0E2E]/.test(chars[i])) {
+      for (let c of ["ก", "ด", "ต", "บ", "ป", "ม", "ร", "ล", "ส"]) {
+        if (c !== chars[i]) {
+          const copy = [...chars];
+          copy[i] = c;
+          set.add(copy.join(""));
+        }
+      }
+    }
+  }
+
+  while (set.size < 3) {
+    const randCons = THAI_CONSONANTS_SAFE[Math.floor(Math.random() * THAI_CONSONANTS_SAFE.length)];
+    set.add(randCons + word);
+  }
+
+  set.delete(word);
+  return Array.from(set).slice(0, 3);
+}
+
+function buildBlankExercise(item) {
+  const words = splitThaiWords(item.thai);
+  if (!words.length) return null;
+  const idx = pickHiddenWord(item);
+  const hidden = words[idx];
+  const before = words.slice(0, idx).join(" ");
+  const after  = words.slice(idx + 1).join(" ");
+  return { hidden, before, after, idx, words };
+}
+
+function buildChoiceExercise(item) {
+  const words = splitThaiWords(item.thai);
+  if (!words.length) return null;
+
+  let idx = pickHiddenWord(item);
+  let correct = words[idx];
+  const cleaned = correct.replace(/[^\u0E00-\u0E7F]/g, "");
+
+  if (thaiLength(cleaned) > 6) {
+    const shortIdx = words.findIndex(w => {
+      const c = w.replace(/[^\u0E00-\u0E7F]/g, "");
+      if (!c || MOTS_INTERDITS.has(c)) return false;
+      const l = thaiLength(c);
+      return l >= 2 && l <= 6;
+    });
+    if (shortIdx !== -1) idx = shortIdx;
+  }
+  return buildChoiceAt(item, idx);
+}
+
+function buildChoiceAt(item, idx) {
+  const words = splitThaiWords(item.thai);
+  const correct = words[idx];
+  const distractors = generateDistractors(correct);
+  const options = shuffle([correct, ...distractors]);
+  return {
+    idx, correct, options,
+    before: words.slice(0, idx).join(" "),
+    after:  words.slice(idx + 1).join(" ")
+  };
+}
+
+function buildPrefixExercise(item) {
+  const words = splitThaiWords(item.thai);
+  if (words.length < 2) return null;
+
+  let cut = 1;
+  for (let i = 1; i < words.length - 1; i++) {
+    const cleaned = words[i-1].replace(/[^\u0E00-\u0E7F]/g, "");
+    if (MOTS_INTERDITS.has(cleaned)) {
+      cut = i;
+      if (words.length - i >= 2) cut = i;
+    }
+  }
+
+  cut = Math.max(1, Math.min(cut, words.length - 1));
+
+  const prefix = words.slice(0, cut).join(" ");
+  const suffix = words.slice(cut).join(" ");
+  return { prefix, suffix, cut, words };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   4) APPLICATION
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+
+  /* ─── DOM ─── */
+  const scenarioSelect = $("scenarioSelect");
+  const modeSelect     = $("modeSelect");
+  const orthoVariantLabel = $("orthoVariantLabel");
+  const orthoVariant   = $("orthoVariant");
+  const dueOnly        = $("dueOnly");
+  const kbToggle       = $("kbToggle");
+  const keyboard       = $("keyboard");
+  const keyboard2      = $("keyboard2");
+  const questionCard   = $("questionCard");
+  const orthoCard      = $("orthoCard");
+  const structureCard  = $("structureCard");
+  const correction     = $("correction");
+  const promptFr       = $("promptFr");
+  const promptLabel    = $("promptLabel");
+  const speaker        = $("speaker");
+  const answerInput    = $("answerInput");
+  const checkBtn       = $("checkBtn");
+  const showBtn        = $("showBtn");
+  const markBtn        = $("markBtn");
+  const nextBtn        = $("nextBtn");
+  const corrHeader     = $("corrHeader");
+  const verdict        = $("verdict");
+  const corrThai       = $("corrThai");
+  const corrRom        = $("corrRom");
+  const corrFr         = $("corrFr");
+  const corrSlots      = $("corrSlots");
+  const corrNote       = $("corrNote");
+  const corrExpl       = $("corrExpl");
+  const selfEval       = $("selfEval");
+  const evalOk         = $("evalOk");
+  const evalKo         = $("evalKo");
+  const metaScenario   = $("metaScenario");
+  const metaSousScenario = $("metaSousScenario");
+  const metaRegistre   = $("metaRegistre");
+  const metaBox        = $("metaBox");
+  const scoreEl        = $("score");
+  const progressEl     = $("progress");
+  const dueCount       = $("dueCount");
+  const globalStats    = $("globalStats");
+  const detailStats    = $("detailStats").querySelector("tbody");
+  const exportArea     = $("exportArea");
+  const importFile     = $("importFile");
+
+  const orthoScenario  = $("orthoScenario");
+  const orthoBox       = $("orthoBox");
+  const orthoTypeBadge = $("orthoTypeBadge");
+  const orthoInstruction = $("orthoInstruction");
+  const orthoFr        = $("orthoFr");
+  const orthoBlankZone = $("orthoBlankZone");
+  const orthoChoiceZone = $("orthoChoiceZone");
+  const orthoPrefixZone = $("orthoPrefixZone");
+  const blankLine      = $("blankLine");
+  const blankInput     = $("blankInput");
+  const choiceLine     = $("choiceLine");
+  const choices        = $("choices");
+  const prefixBox      = $("prefixBox");
+  const prefixInput    = $("prefixInput");
+  const orthoCheckBtn  = $("orthoCheckBtn");
+  const orthoShowBtn   = $("orthoShowBtn");
+  const orthoMarkBtn   = $("orthoMarkBtn");
+  const orthoNextBtn   = $("orthoNextBtn");
+
+  /* ─── État & Focus Clavier ─── */
+  let pool = [];
+  let index = 0;
+  let currentScenario = "all";
+  let currentMode = "ordre";
+  let structIndex = 0;
+  let currentOrtho = null;
+  let activeInput = answerInput; // Suivi robuste du champ actif
+
+  document.querySelectorAll('input[type="text"], textarea').forEach(el => {
+    el.addEventListener('focus', () => { activeInput = el; });
+  });
+
+  /* ─── Leitner ─── */
+  const today = () => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); };
+  const DAY = 24*60*60*1000;
+  const DELAIS = {1:1, 2:3, 3:7, 4:14, 5:30};
+  const phraseId = p => p.id || `${p.scenario}__${p.sousScenario}__${p.tour}`;
+
+  /* ─── Progression ─── */
+  const STORAGE_KEY = "reviseThai.progress.v6";
+  let progress = {};
+  let globalCounters = { ok: 0, total: 0 };
+
+  function loadProgress() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      progress = data.progress || {};
+      globalCounters = data.globalCounters || { ok: 0, total: 0 };
+      currentScenario = data.currentScenario || "all";
+      currentMode = data.currentMode || "ordre";
+    } catch(e) {}
+  }
+  function saveProgress() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        progress, globalCounters, currentScenario, currentMode
+      }));
+    } catch(e) {}
+  }
+  function getEntry(id) {
+    if (!progress[id]) progress[id] = {
+      box:1, ok:0, ko:0, lastSeen:0, nextDue:0, marked:false
+    };
+    return progress[id];
+  }
+  function recordResult(id, isOk) {
+    const e = getEntry(id);
+    e.lastSeen = today();
+    if (isOk) { e.ok++; e.box = Math.min(5, e.box+1); }
+    else { e.ko++; e.box = 1; }
+    e.marked = false;
+    e.nextDue = today() + (DELAIS[e.box] || 30) * DAY;
+    globalCounters.total++;
+    if (isOk) globalCounters.ok++;
+    saveProgress();
+  }
+  function markToReview(id) {
+    const e = getEntry(id);
+    e.marked = true; e.box = 1; e.nextDue = today();
+    saveProgress();
+  }
+  function isDue(p) {
+    const e = progress[phraseId(p)];
+    if (!e) return true;
+    if (e.marked) return true;
+    return today() >= e.nextDue;
+  }
+  function countDue(filtered) { return filtered.filter(isDue).length; }
+
+  /* ─── Utils (NFC Normalization) ─── */
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  const normalize = s => String(s)
+    .normalize("NFC")
+    .replace(/[\u200B-\u200D\uFEFF]/g,"")
+    .replace(/[.,!?…;:«»"']/g,"")
+    .replace(/\s+/g," ").trim();
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const m = a.length, n = b.length;
+    const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+    for (let i=0;i<=m;i++) dp[i][0]=i;
+    for (let j=0;j<=n;j++) dp[0][j]=j;
+    for (let i=1;i<=m;i++) for (let j=1;j<=n;j++) {
+      const cost = a[i-1]===b[j-1]?0:1;
+      dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
+    }
+    return dp[m][n];
+  }
+  function isCloseEnough(user, target) {
+    if (user === target) return "exact";
+    const len = Math.max(user.length, target.length);
+    const tol = len <= 10 ? 1 : 2;
+    return levenshtein(user, target) <= tol ? "close" : "no";
+  }
+  function fillSlots(text, slots, key) {
+    if (!text) return "";
+    if (!slots || !slots.length) return text;
+    return text.replace(/\{\{(\w+)\}\}/g, (_, k) => {
+      const s = slots.find(x => x.cle === k);
+      return s ? s[key] : k;
+    });
+  }
+
+  /* ─── Pool ─── */
+  function rebuildPool() {
+    let filtered = currentScenario === "all"
+      ? DIALOGUES
+      : DIALOGUES.filter(d => d.scenario === currentScenario);
+    if (dueOnly.checked) filtered = filtered.filter(isDue);
+    pool = (currentMode === "aleatoire" || currentMode === "replique" || currentMode === "orthographe")
+      ? shuffle(filtered) : filtered.slice();
+    index = 0;
+    render();
+  }
+
+  /* ─── Onglets ─── */
+  function switchTab(name) {
+    document.querySelectorAll(".tab").forEach(t =>
+      t.classList.toggle("active", t.dataset.tab === name));
+    $("tab-practice").classList.toggle("hidden", name !== "practice");
+    $("tab-stats").classList.toggle("hidden", name !== "stats");
+    $("tab-tools").classList.toggle("hidden", name !== "tools");
+    if (name === "stats") renderStats();
+  }
+
+  function clearDynamicZones() {
+    correction.classList.add("hidden");
+    corrThai.textContent = "";
+    corrRom.textContent = "";
+    corrFr.textContent = "";
+    corrSlots.innerHTML = "";
+    corrNote.textContent = "";
+    corrNote.style.display = "none";
+    corrExpl.textContent = "";
+    corrExpl.style.display = "none";
+    verdict.textContent = "";
+    verdict.className = "verdict";
+
+    blankLine.innerHTML = "";
+    choiceLine.innerHTML = "";
+    choices.innerHTML = "";
+    prefixBox.innerHTML = "";
+    blankInput.value = "";
+    prefixInput.value = "";
+    blankInput.disabled = false;
+    prefixInput.disabled = false;
+    orthoBlankZone.classList.add("hidden");
+    orthoChoiceZone.classList.add("hidden");
+    orthoPrefixZone.classList.add("hidden");
+
+    answerInput.value = "";
+    answerInput.disabled = false;
+    currentOrtho = null;
+    activeInput = answerInput;
+  }
+
+  function render() {
+    nextBtn.disabled = true;
+    orthoNextBtn.disabled = true;
+    checkBtn.disabled = false;
+    showBtn.disabled = false;
+    markBtn.disabled = false;
+    orthoCheckBtn.disabled = false;
+    orthoShowBtn.disabled = false;
+    orthoMarkBtn.disabled = false;
+    markBtn.textContent = "★ À revoir demain";
+    orthoMarkBtn.textContent = "★ À revoir demain";
+
+    clearDynamicZones();
+    updateHeaderCounters();
+
+    questionCard.classList.add("hidden");
+    orthoCard.classList.add("hidden");
+    structureCard.classList.add("hidden");
+
+    if (currentMode === "structure") {
+      structureCard.classList.remove("hidden");
+      renderStructure();
+      return;
+    }
+    if (currentMode === "orthographe") {
+      orthoCard.classList.remove("hidden");
+      renderOrtho();
+      return;
+    }
+    questionCard.classList.remove("hidden");
+    renderQuestion();
+    activeInput = answerInput;
+  }
+
+  function renderQuestion() {
+    const item = pool[index];
+    if (!item) {
+      promptFr.textContent = "Aucun tour disponible.";
+      speaker.textContent = "";
+      metaScenario.textContent = "";
+      metaSousScenario.textContent = "";
+      metaRegistre.textContent = "";
+      metaBox.textContent = "";
+      return;
+    }
+    const id = phraseId(item);
+    const e = getEntry(id);
+
+    metaScenario.textContent = item.scenario;
+    metaSousScenario.textContent = item.sousScenario || "";
+    metaRegistre.textContent = item.registre || "";
+    metaBox.textContent = `Boîte ${e.box}`;
+    metaBox.className = "badge badge-box box-" + e.box;
+
+    if (currentMode === "replique") {
+      const previous = getPreviousInDialogue(item);
+      if (previous && previous.locuteur !== item.locuteur) {
+        speaker.textContent = `${previous.locuteur} : ${fillSlots(previous.thai, previous.slots, "exemple")}`;
+        promptLabel.textContent = `Répondez en tant que ${item.locuteur} :`;
+        promptFr.textContent = fillSlots(item.fr, item.slots, "exempleFr");
+      } else {
+        speaker.textContent = "";
+        promptLabel.textContent = "Que dites-vous en thaï ?";
+        promptFr.textContent = fillSlots(item.fr, item.slots, "exempleFr");
+      }
+    } else {
+      speaker.textContent = "";
+      promptLabel.textContent = "Que dites-vous en thaï ?";
+      promptFr.textContent = fillSlots(item.fr, item.slots, "exempleFr");
+    }
+
+    progressEl.textContent = `Tour ${index + 1} / ${pool.length}`;
+    updateScore();
+  }
+
+  function getPreviousInDialogue(item) {
+    const all = DIALOGUES.filter(d =>
+      d.scenario === item.scenario && d.sousScenario === item.sousScenario
+    ).sort((a,b) => a.tour - b.tour);
+    const pos = all.findIndex(d => d.tour === item.tour);
+    return pos > 0 ? all[pos-1] : null;
+  }
+
+  function renderOrtho() {
+    const item = pool[index];
+    if (!item) {
+      orthoInstruction.textContent = "Aucun tour disponible.";
+      return;
+    }
+
+    const id = phraseId(item);
+    const e = getEntry(id);
+
+    orthoVariantLabel.style.display = "flex";
+
+    orthoScenario.textContent = item.scenario;
+    orthoBox.textContent = `Boîte ${e.box}`;
+    orthoBox.className = "badge badge-box box-" + e.box;
+    orthoFr.textContent = fillSlots(item.fr, item.slots, "exempleFr");
+
+    orthoBlankZone.classList.add("hidden");
+    orthoChoiceZone.classList.add("hidden");
+    orthoPrefixZone.classList.add("hidden");
+    keyboard2.classList.remove("open");
+
+    let variant = orthoVariant.value;
+
+    if (variant === "auto") {
+      const variants = ["trou", "choix", "amorce"];
+      const offset = Array.from(String(item.thai)).length;
+      variant = variants[(index + offset) % variants.length];
+    }
+
+    if (variant === "choix" && !buildChoiceExercise(item)) variant = "trou";
+    if (variant === "amorce" && !buildPrefixExercise(item)) variant = "trou";
+    if (variant === "trou" && !buildBlankExercise(item)) {
+      orthoInstruction.textContent = "Exercice indisponible pour cette phrase.";
+      return;
+    }
+
+    if (variant === "trou") {
+      const ex = buildBlankExercise(item);
+      currentOrtho = { type: "trou", item, ex, variant };
+
+      orthoTypeBadge.textContent = "🔤 Trou unique";
+      orthoInstruction.textContent =
+        `Complétez la phrase (mot manquant : ${Array.from(String(ex.hidden)).length} caractères) :`;
+
+      blankLine.innerHTML =
+        (ex.before ? `<span class="fixed">${ex.before}</span> ` : "") +
+        `<span class="blank" id="blankSlot">${"_".repeat(Array.from(String(ex.hidden)).length)}</span>` +
+        (ex.after ? ` <span class="fixed">${ex.after}</span>` : "");
+
+      blankInput.value = "";
+      blankInput.disabled = false;
+      orthoBlankZone.classList.remove("hidden");
+      activeInput = blankInput;
+      setTimeout(() => blankInput.focus(), 50);
+
+    } else if (variant === "choix") {
+      const ex = buildChoiceExercise(item);
+      currentOrtho = { type: "choix", item, ex, variant };
+
+      orthoTypeBadge.textContent = "🔤 Choix de graphie";
+      orthoInstruction.textContent = "Choisissez la bonne graphie :";
+
+      choiceLine.innerHTML =
+        (ex.before ? `<span class="fixed">${ex.before}</span> ` : "") +
+        `<span class="blank" id="choiceSlot">?</span>` +
+        (ex.after ? ` <span class="fixed">${ex.after}</span>` : "");
+
+      choices.innerHTML = "";
+      ex.options.forEach(opt => {
+        const b = document.createElement("button");
+        b.className = "choice";
+        b.type = "button";
+        b.textContent = opt;
+        b.dataset.value = opt;
+        b.addEventListener("click", () => handleChoiceClick(b, opt));
+        choices.appendChild(b);
+      });
+      orthoChoiceZone.classList.remove("hidden");
+
+    } else if (variant === "amorce") {
+      const ex = buildPrefixExercise(item);
+      currentOrtho = { type: "amorce", item, ex, variant };
+
+      orthoTypeBadge.textContent = "🔤 Amorce donnée";
+      orthoInstruction.textContent = "Complétez la fin de la phrase :";
+
+      prefixBox.innerHTML =
+        `<span class="known">${ex.prefix}</span> ` +
+        `<span class="toComplete">… (à vous de compléter)</span>`;
+
+      prefixInput.value = "";
+      prefixInput.disabled = false;
+      orthoPrefixZone.classList.remove("hidden");
+      activeInput = prefixInput;
+      setTimeout(() => prefixInput.focus(), 50);
+    }
+
+    progressEl.textContent = `Tour ${index + 1} / ${pool.length}`;
+    updateScore();
+  }
+
+  function handleChoiceClick(btn, opt) {
+    if (btn.disabled || !currentOrtho) return;
+    const ex = currentOrtho.ex;
+    const isCorrect = opt === ex.correct;
+
+    choices.querySelectorAll(".choice").forEach(c => {
+      c.disabled = true;
+      if (c.dataset.value === ex.correct) c.classList.add("correct");
+      else if (c === btn && !isCorrect) c.classList.add("wrong");
+      else c.classList.add("dimmed");
+    });
+
+    const slot = $("choiceSlot");
+    if (slot) {
+      slot.textContent = ex.correct;
+      slot.classList.remove("blank");
+      slot.classList.add("filled");
+    }
+
+    recordResult(phraseId(currentOrtho.item), isCorrect);
+    updateHeaderCounters();
+    updateScore();
+
+    showCorrection(currentOrtho.item, isCorrect ? "ortho-ok" : "ortho-ko",
+      isCorrect ? "" : `Vous avez choisi « ${opt} », la bonne réponse était « ${ex.correct} ».`);
+
+    orthoCheckBtn.disabled = true;
+    orthoShowBtn.disabled = true;
+    orthoMarkBtn.disabled = true;
+    orthoNextBtn.disabled = false;
+  }
+
+  function handleOrthoCheck() {
+    if (!currentOrtho) return;
+    const { type, item, ex } = currentOrtho;
+
+    if (type === "trou") {
+      const userAns = blankInput.value.trim();
+      if (!userAns) { blankInput.focus(); return; }
+      const r = isCloseEnough(normalize(userAns), normalize(ex.hidden));
+      const isOk = r === "exact" || r === "close";
+      const slot = $("blankSlot");
+      if (slot) {
+        slot.textContent = userAns;
+        slot.classList.remove("blank");
+        slot.classList.add("filled");
+        if (!isOk) slot.style.color = "var(--ko)";
+      }
+      recordResult(phraseId(item), isOk);
+      showCorrection(item, isOk ? (r==="exact" ? "ortho-ok" : "ortho-close") : "ortho-ko",
+        r === "exact" ? "" : `Vous avez écrit « ${userAns} », la bonne réponse était « ${ex.hidden} ».`);
+      blankInput.disabled = true;
+
+    } else if (type === "amorce") {
+      const userAns = prefixInput.value.trim();
+      if (!userAns) { prefixInput.focus(); return; }
+      const r = isCloseEnough(normalize(userAns), normalize(ex.suffix));
+      const isOk = r === "exact" || r === "close";
+      prefixBox.innerHTML =
+        `<span class="known">${ex.prefix}</span> ` +
+        `<span class="${isOk ? 'filled' : 'filled'}" style="${isOk ? '' : 'color:var(--ko)'}">${userAns}</span>`;
+      recordResult(phraseId(item), isOk);
+      showCorrection(item, isOk ? (r==="exact" ? "ortho-ok" : "ortho-close") : "ortho-ko",
+        r === "exact" ? "" : `Vous avez écrit « ${userAns} », la bonne réponse était « ${ex.suffix} ».`);
+      prefixInput.disabled = true;
+    }
+
+    updateHeaderCounters();
+    updateScore();
+    orthoCheckBtn.disabled = true;
+    orthoShowBtn.disabled = true;
+    orthoMarkBtn.disabled = true;
+    orthoNextBtn.disabled = false;
+  }
+
+  function handleOrthoShow() {
+    if (!currentOrtho) return;
+    const { type, item, ex } = currentOrtho;
+
+    if (type === "trou" && ex.hidden) {
+      const slot = $("blankSlot");
+      if (slot) {
+        slot.textContent = ex.hidden;
+        slot.classList.remove("blank");
+        slot.classList.add("filled");
+      }
+      blankInput.disabled = true;
+
+    } else if (type === "amorce" && ex.suffix) {
+      prefixBox.innerHTML =
+        `<span class="known">${ex.prefix}</span> ` +
+        `<span class="filled">${ex.suffix}</span>`;
+      prefixInput.disabled = true;
+
+    } else if (type === "choix") {
+      choices.querySelectorAll(".choice").forEach(c => {
+        c.disabled = true;
+        if (c.dataset.value === ex.correct) c.classList.add("correct");
+        else c.classList.add("dimmed");
+      });
+      const slot = $("choiceSlot");
+      if (slot) {
+        slot.textContent = ex.correct;
+        slot.classList.remove("blank");
+        slot.classList.add("filled");
+      }
+    }
+
+    showCorrection(item, "reveal", "");
+    orthoCheckBtn.disabled = true;
+    orthoShowBtn.disabled = true;
+    orthoNextBtn.disabled = false;
+  }
+
+  function handleOrthoMark() {
+    if (!currentOrtho) return;
+    markToReview(phraseId(currentOrtho.item));
+    orthoMarkBtn.textContent = "★ Marquée !";
+    orthoMarkBtn.disabled = true;
+    setTimeout(() => { orthoMarkBtn.textContent = "★ À revoir demain"; }, 1200);
+    updateHeaderCounters();
+  }
+
+  function nextOrtho() {
+    if (index < pool.length - 1) {
+      index++;
+      render();
+    } else {
+      orthoInstruction.textContent = "🎉 Fin du paquet !";
+      orthoBlankZone.classList.add("hidden");
+      orthoChoiceZone.classList.add("hidden");
+      orthoPrefixZone.classList.add("hidden");
+      blankLine.innerHTML = "";
+      choiceLine.innerHTML = "";
+      choices.innerHTML = "";
+      prefixBox.innerHTML = "";
+      orthoCheckBtn.disabled = true;
+      orthoShowBtn.disabled = true;
+      orthoMarkBtn.disabled = true;
+      orthoNextBtn.disabled = true;
+    }
+  }
+
+  function renderStructure() {
+    const s = STRUCTURES[structIndex % STRUCTURES.length];
+    $("structMoule").textContent = s.moule;
+    $("structExpl").textContent = s.expl;
+    $("structEx").textContent = "Ex. : " + s.exemple;
+    $("struct1").value = "";
+    $("struct2").value = "";
+    $("struct3").value = "";
+    $("struct1").focus();
+    activeInput = $("struct1");
+  }
+
+  function handleCheck() {
+    const item = pool[index];
+    if (!item) return;
+    const userAns = answerInput.value;
+    if (!userAns.trim()) { answerInput.focus(); return; }
+
+    const targets = [
+      fillSlots(item.thai, item.slots, "exemple"),
+      fillSlots(item.rom,  item.slots, "exempleRom")
+    ];
+    let best = "no";
+    for (const t of targets) {
+      const r = isCloseEnough(normalize(userAns), normalize(t));
+      if (r === "exact") { best = "exact"; break; }
+      if (r === "close" && best !== "exact") best = "close";
+    }
+    const id = phraseId(item);
+    const isOk = best === "exact" || best === "close";
+    recordResult(id, isOk);
+
+    showCorrection(item, isOk ? (best==="exact"?"auto-ok":"auto-close") : "auto-ko", "");
+    updateHeaderCounters(); updateScore();
+    answerInput.disabled = true;
+    checkBtn.disabled = true;
+    showBtn.disabled = true;
+    markBtn.disabled = true;
+    nextBtn.disabled = false;
+  }
+
+  function handleShow() {
+    const item = pool[index];
+    if (!item) return;
+    showCorrection(item, "reveal", "");
+    answerInput.disabled = true;
+    checkBtn.disabled = true;
+    showBtn.disabled = true;
+    nextBtn.disabled = false;
+  }
+
+  function handleMark() {
+    const item = pool[index];
+    if (!item) return;
+    markToReview(phraseId(item));
+    markBtn.textContent = "★ Marquée !";
+    markBtn.disabled = true;
+    setTimeout(() => { markBtn.textContent = "★ À revoir demain"; }, 1200);
+    updateHeaderCounters();
+  }
+
+  function showCorrection(item, mode, extraExpl) {
+    corrThai.textContent = fillSlots(item.thai, item.slots, "exemple");
+    corrRom.textContent  = fillSlots(item.rom,  item.slots, "exempleRom");
+    corrFr.textContent   = fillSlots(item.fr,   item.slots, "exempleFr");
+
+    if (item.slots && item.slots.length) {
+      corrSlots.innerHTML = item.slots
+        .map(s => `• <code>${s.cle}</code> → ${s.exempleFr} (${s.exempleRom})`)
+        .join("<br>");
+    } else corrSlots.innerHTML = "";
+
+    corrNote.textContent = item.note || "";
+    corrNote.style.display = item.note ? "block" : "none";
+
+    if (extraExpl) {
+      corrExpl.textContent = extraExpl;
+      corrExpl.style.display = "block";
+    } else {
+      corrExpl.textContent = "";
+      corrExpl.style.display = "none";
+    }
+
+    if (mode === "auto-ok" || mode === "ortho-ok") {
+      corrHeader.textContent = "Correction";
+      verdict.textContent = "✔ Bonne réponse !";
+      verdict.className = "verdict ok";
+    } else if (mode === "auto-close" || mode === "ortho-close") {
+      corrHeader.textContent = "Correction";
+      verdict.textContent = "≈ Presque ! (faute mineure tolérée)";
+      verdict.className = "verdict warn";
+    } else if (mode === "auto-ko" || mode === "ortho-ko") {
+      corrHeader.textContent = "Correction";
+      verdict.textContent = "✘ Pas tout à fait — retour boîte 1";
+      verdict.className = "verdict ko";
+    } else {
+      corrHeader.textContent = "Réponse modèle";
+      verdict.textContent = "";
+      verdict.className = "verdict";
+    }
+
+    correction.classList.remove("hidden");
+    selfEval.style.display = (mode === "reveal") ? "flex" : "none";
+    correction.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+
+  function registerSelfEval(isOk) {
+    const item = pool[index];
+    if (!item) return;
+    recordResult(phraseId(item), isOk);
+    updateHeaderCounters();
+    updateScore();
+    next();
+  }
+
+  function next() {
+    if (index < pool.length - 1) {
+      index++;
+      render();
+    } else {
+      promptFr.textContent = "🎉 Fin du paquet !";
+      speaker.textContent = "";
+      metaScenario.textContent = "";
+      metaSousScenario.textContent = "";
+      metaRegistre.textContent = "";
+      metaBox.textContent = "";
+      answerInput.disabled = true;
+      checkBtn.disabled = true;
+      showBtn.disabled = true;
+      markBtn.disabled = true;
+      nextBtn.disabled = true;
+      correction.classList.add("hidden");
+      progressEl.textContent = `Terminé — ${pool.length} tours`;
+    }
+  }
+
+  function nextStructure() { structIndex++; renderStructure(); }
+
+  function updateScore() {
+    scoreEl.textContent = `Score : ${globalCounters.ok} / ${globalCounters.total}`;
+  }
+  function updateHeaderCounters() {
+    const filtered = currentScenario === "all"
+      ? DIALOGUES
+      : DIALOGUES.filter(d => d.scenario === currentScenario);
+    dueCount.textContent = `À réviser : ${countDue(filtered)}`;
+  }
+
+  function renderStats() {
+    const total = DIALOGUES.length;
+    const seen = Object.keys(progress).length;
+    const byBox = {1:0,2:0,3:0,4:0,5:0};
+    Object.values(progress).forEach(e => { byBox[e.box] = (byBox[e.box]||0)+1; });
+
+    globalStats.innerHTML = `
+      <p>Phrases totales : <strong>${total}</strong></p>
+      <p>Phrases vues : <strong>${seen}</strong> (${Math.round(seen/total*100)} %)</p>
+      <p>Réussites : <strong>${globalCounters.ok}</strong> / ${globalCounters.total}
+         (${globalCounters.total ? Math.round(globalCounters.ok/globalCounters.total*100) : 0} %)</p>
+      <p style="margin-top:.5rem">Répartition par boîte :</p>
+      <p>${[1,2,3,4,5].map(b =>
+        `<span class="box-indicator box-${b}">${b}</span>${byBox[b]||0}`
+      ).join(" &nbsp; ")}</p>
+    `;
+
+    const rows = DIALOGUES.map(p => {
+      const e = progress[phraseId(p)] || {box:"—", ok:0, ko:0, lastSeen:0};
+      const last = e.lastSeen ? new Date(e.lastSeen).toLocaleDateString("fr-FR") : "—";
+      const boxClass = typeof e.box === "number" ? `box-${e.box}` : "";
+      return { box:e.box, boxClass, fr:p.fr, ok:e.ok, ko:e.ko, last };
+    }).sort((a,b) => {
+      const av = typeof a.box === "number" ? a.box : 99;
+      const bv = typeof b.box === "number" ? b.box : 99;
+      return av - bv;
+    });
+
+    detailStats.innerHTML = rows.map(r => `
+      <tr>
+        <td><span class="box-indicator ${r.boxClass}">${r.box}</span></td>
+        <td>${escapeHtml(r.fr)}</td>
+        <td>${r.ok}</td>
+        <td>${r.ko}</td>
+        <td>${r.last}</td>
+      </tr>
+    `).join("");
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function exportProgress() {
+    const txt = JSON.stringify({
+      progress, globalCounters, exportedAt: new Date().toISOString()
+    }, null, 2);
+    exportArea.value = txt;
+    shareFile(new Blob([txt], {type:"application/json"}),
+      "revision-thai-" + new Date().toISOString().slice(0,10) + ".json").then(ok => {
+      if (ok) { const m = loadMeta(); m.lastExport = Date.now(); saveMeta(m); updateBackupInfo(); }
+    });
+  }
+  function importProgress() { importFile.click(); }
+  function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (data.progress) progress = data.progress;
+        if (data.globalCounters) globalCounters = data.globalCounters;
+        saveProgress(); updateScore(); updateHeaderCounters();
+        alert("Progression importée !");
+      } catch(err) {
+        try {
+          const data = JSON.parse(exportArea.value);
+          if (data.progress) progress = data.progress;
+          if (data.globalCounters) globalCounters = data.globalCounters;
+          saveProgress(); updateScore(); updateHeaderCounters();
+          alert("Progression importée depuis la zone de texte !");
+        } catch(e2) { alert("Fichier ou JSON invalide."); }
+      }
+    };
+    reader.readAsText(file);
+  }
+  function importFromTextarea() {
+    try {
+      const data = JSON.parse(exportArea.value);
+      if (data.progress) progress = data.progress;
+      if (data.globalCounters) globalCounters = data.globalCounters;
+      saveProgress(); updateScore(); updateHeaderCounters();
+      alert("Progression importée !");
+    } catch(e) { alert("JSON invalide."); }
+  }
+  function resetAllProgress() {
+    if (!confirm("Effacer TOUTE la progression ?")) return;
+    progress = {}; globalCounters = {ok:0, total:0};
+    saveProgress(); updateScore(); updateHeaderCounters();
+    alert("Progression réinitialisée.");
+  }
+
+  /* ─── Clavier thaï ─── */
+  const CONSONNES = ["ก","ข","ฃ","ค","ฅ","ฆ","ง","จ","ฉ","ช","ซ","ฌ","ญ",
+    "ฎ","ฏ","ฐ","ฑ","ฒ","ณ","ด","ต","ถ","ท","ธ","น",
+    "บ","ป","ผ","ฝ","พ","ฟ","ภ","ม","ย","ร","ล","ว",
+    "ศ","ษ","ส","ห","ฬ","อ","ฮ"];
+  const VOYELLES = ["ะ","ั","า","ำ","ิ","ี","ึ","ื","ุ","ู","เ","แ","โ","ใ","ไ","ๆ","์","็","่","้","๊","๋","ํ","ๅ"];
+  const CHIFFRES = ["๐","๑","๒","๓","๔","๕","๖","๗","๘","๙","฿","ฯ","๚"];
+
+  function buildKeyboard() {
+    const mk = ch => {
+      const b = document.createElement("button");
+      b.className = "kb-key"; b.type = "button";
+      b.textContent = ch; b.dataset.kb = ch;
+      return b;
+    };
+    CONSONNES.forEach(ch => $("kbConsonnes").appendChild(mk(ch)));
+    VOYELLES.forEach(ch => $("kbVoyelles").appendChild(mk(ch)));
+    CHIFFRES.forEach(ch => $("kbChiffres").appendChild(mk(ch)));
+    CONSONNES.forEach(ch => $("kbConsonnes2").appendChild(mk(ch)));
+    VOYELLES.forEach(ch => $("kbVoyelles2").appendChild(mk(ch)));
+    CHIFFRES.forEach(ch => $("kbChiffres2").appendChild(mk(ch)));
+
+    const handler = (e) => {
+      const btn = e.target.closest(".kb-key");
+      if (!btn) return;
+      const k = btn.dataset.kb;
+      
+      // Utilisation du champ actif suivi dynamiquement
+      let el = activeInput;
+      if (!el || !el.matches("input,textarea") || el.disabled) {
+        el = currentMode === "orthographe"
+          ? (currentOrtho?.type === "trou" ? blankInput
+            : currentOrtho?.type === "amorce" ? prefixInput : blankInput)
+          : answerInput;
+      }
+      if (!el || el.disabled) return;
+
+      const start = el.selectionStart || el.value.length;
+      const end = el.selectionEnd || el.value.length;
+      const val = el.value;
+
+      if (k === "BACK") {
+        if (start !== end) {
+          el.value = val.substring(0, start) + val.substring(end);
+          el.selectionStart = el.selectionEnd = start;
+        } else if (start > 0) {
+          el.value = val.substring(0, start - 1) + val.substring(start);
+          el.selectionStart = el.selectionEnd = start - 1;
+        }
+      } else if (k === "CLEAR") {
+        el.value = "";
+      } else if (k === " ") {
+        el.value = val.substring(0, start) + " " + val.substring(end);
+        el.selectionStart = el.selectionEnd = start + 1;
+      } else {
+        el.value = val.substring(0, start) + k + val.substring(end);
+        el.selectionStart = el.selectionEnd = start + k.length;
+      }
+      el.focus();
+      activeInput = el;
+    };
+    keyboard.addEventListener("click", handler);
+    keyboard2.addEventListener("click", handler);
+  }
+
+  /* ═══ Cartes de la fiche d'écriture (v7) ═══ */
+  const FICHE_KEY = "reviseThai.fiche.v1";
+  const META_KEY  = "reviseThai.meta.v1";
+  let ficheCards = [];                       // {sheetId, sheet, n, thai, fr, st}
+  let ficheInfo  = { updated: 0 };
+
+  function loadMeta() { try { return JSON.parse(localStorage.getItem(META_KEY) || "{}") || {}; } catch(e) { return {}; } }
+  function saveMeta(m) { try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch(e) {} }
+  function loadFiche() {
+    try {
+      const d = JSON.parse(localStorage.getItem(FICHE_KEY) || "null");
+      if (d && Array.isArray(d.cards)) { ficheCards = d.cards; ficheInfo = { updated: d.updated || 0 }; }
+    } catch(e) {}
+  }
+  function saveFiche() {
+    try { localStorage.setItem(FICHE_KEY, JSON.stringify({ cards: ficheCards, updated: ficheInfo.updated })); } catch(e) {}
+  }
+
+  function applyFiche() {
+    for (let i = DIALOGUES.length - 1; i >= 0; i--) if (DIALOGUES[i].fromFiche) DIALOGUES.splice(i, 1);
+    ficheCards.forEach(c => DIALOGUES.push({
+      id: "fiche__" + c.sheetId + "__" + c.n, fromFiche: true,
+      scenario: "fiche", theme: "Fiche", sousScenario: c.sheet, tour: c.n,
+      locuteur: "", registre: c.st === 2 ? "✗ à retravailler" : "",
+      thai: c.thai, rom: "", fr: c.fr, slots: [], note: "", keywords: []
+    }));
+  }
+
+  function fillScenarioSelect() {
+    const scenarios = ["all", ...new Set(DIALOGUES.map(d => d.scenario))];
+    if (currentScenario !== "all" && !scenarios.includes(currentScenario)) currentScenario = "all";
+    scenarioSelect.innerHTML = scenarios
+      .map(s => `<option value="${s}"${s===currentScenario?" selected":""}>${s==="all"?"Tous":s==="fiche"?"✍️ fiche":s}</option>`)
+      .join("");
+  }
+
+  function mergeFiche(incoming) {
+    const map = new Map(ficheCards.map(c => [c.sheetId + "__" + c.n, c]));
+    let added = 0, changed = 0, flagged = 0;
+    incoming.forEach(c => {
+      const key = c.sheetId + "__" + c.n, prev = map.get(key);
+      if (!prev) added++;
+      else if (prev.thai !== c.thai || prev.fr !== c.fr || prev.sheet !== c.sheet || prev.st !== c.st) changed++;
+      if (c.st === 2 && (!prev || prev.st !== 2)) { markToReview("fiche__" + key); flagged++; }
+      map.set(key, c);
+    });
+    ficheCards = [...map.values()].sort((a, b) =>
+      a.sheet < b.sheet ? -1 : a.sheet > b.sheet ? 1 : a.n - b.n);
+    if (added || changed || flagged) {
+      ficheInfo = { updated: Date.now() };
+      saveFiche(); applyFiche();
+    }
+    return { added, changed, flagged, total: ficheCards.length };
+  }
+
+  function cardsFromFile(d) {
+    if (!d || d.app !== "fiche-thai-cartes" || !Array.isArray(d.sheets)) throw new Error("format");
+    const out = [];
+    d.sheets.forEach(s => (s.lines || []).forEach(l => {
+      if (l && l.thai && l.fr) out.push({
+        sheetId: String(s.id), sheet: String(s.name || "Feuille"), n: l.n | 0,
+        thai: String(l.thai).normalize("NFC"), fr: String(l.fr), st: l.st | 0 });
+    }));
+    return out;
+  }
+  function cardsFromSheets(sheets) {
+    const out = [];
+    sheets.forEach(s => {
+      const rows = s.rows || {};
+      Object.keys(rows).forEach(r => {
+        const x = rows[r];
+        if (x && x.ref && x.fr) out.push({
+          sheetId: String(s.id), sheet: String(s.name || "Feuille"), n: (+r) + 1,
+          thai: String(x.ref).normalize("NFC"), fr: String(x.fr), st: x.st | 0 });
+      });
+    });
+    return out;
+  }
+
+  // Lecture directe de la fiche (même adresse de site). Ne crée JAMAIS de base : si elle n'existe pas, on s'arrête.
+  function readFicheDB() {
+    return new Promise(resolve => {
+      let done = false;
+      const fin = v => { if (!done) { done = true; resolve(v); } };
+      if (!("indexedDB" in window)) { fin(null); return; }
+      setTimeout(() => fin(null), 2500);
+      const check = indexedDB.databases
+        ? indexedDB.databases().then(l => l.some(d => d.name === "ficheThaiV5")).catch(() => true)
+        : Promise.resolve(true);
+      check.then(exists => {
+        if (!exists) { fin(null); return; }
+        let req;
+        try { req = indexedDB.open("ficheThaiV5"); } catch(e) { fin(null); return; }
+        req.onupgradeneeded = e => { try { e.target.transaction.abort(); } catch(_) {} fin(null); };
+        req.onerror = () => fin(null);
+        req.onblocked = () => fin(null);
+        req.onsuccess = () => {
+          const db = req.result;
+          try {
+            if (!db.objectStoreNames.contains("kv")) { db.close(); fin(null); return; }
+            const os = db.transaction("kv").objectStore("kv"), kq = os.getAllKeys(), vq = os.getAll();
+            vq.onsuccess = () => {
+              const out = [];
+              kq.result.forEach((k, i) => { if (String(k).startsWith("sheet:") && vq.result[i]) out.push(vq.result[i]); });
+              db.close(); fin(out);
+            };
+            vq.onerror = () => { db.close(); fin(null); };
+          } catch(e) { try { db.close(); } catch(_) {} fin(null); }
+        };
+      });
+    });
+  }
+  async function syncFromDB(manual) {
+    const sheets = await readFicheDB();
+    if (!sheets) {
+      if (manual) updateFicheStatus("lecture directe impossible depuis cette adresse : utilise « Importer un fichier de la fiche »");
+      return null;
+    }
+    const r = mergeFiche(cardsFromSheets(sheets));
+    if (manual && !r.total) updateFicheStatus("aucune ligne de la fiche n'a encore son thaï et son français tapés");
+    return r;
+  }
+
+  function updateFicheStatus(extra) {
+    const el = $("ficheStatus"); if (!el) return;
+    const ko = ficheCards.filter(c => c.st === 2).length;
+    const when = ficheInfo.updated
+      ? new Date(ficheInfo.updated).toLocaleString("fr-FR", {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}) : "";
+    el.textContent = (ficheCards.length
+      ? ficheCards.length + " carte(s) de la fiche · " + ko + " à retravailler (✗) · mises à jour " + when
+      : "Aucune carte de la fiche pour l'instant.") + (extra ? " — " + extra : "");
+  }
+  function afterFiche(r, label) {
+    fillScenarioSelect(); rebuildPool();
+    updateFicheStatus(label + " : " + r.added + " nouvelle(s), " + r.changed + " modifiée(s), " + r.flagged + " ✗ remise(s) en boîte 1");
+  }
+
+  /* ─── Sauvegarde, stockage, voix ─── */
+  async function shareFile(blob, name) {
+    try {
+      const f = new File([blob], name, {type: blob.type});
+      if (navigator.canShare && navigator.canShare({files: [f]})) { await navigator.share({files: [f], title: name}); return true; }
+    } catch(e) { if (e && e.name === "AbortError") return false; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    return true;
+  }
+  function updateBackupInfo() {
+    const el = $("backupInfo"); if (!el) return;
+    const last = loadMeta().lastExport, stale = !last || Date.now() - last > 7 * 864e5;
+    el.textContent = last
+      ? "Dernière sauvegarde exportée : " + new Date(last).toLocaleDateString("fr-FR") + (stale ? " — pense à en refaire une." : ".")
+      : "Aucune sauvegarde exportée pour l'instant : exporte ta progression de temps en temps.";
+    el.style.color = (stale && Object.keys(progress).length) ? "var(--warn)" : "var(--muted)";
+  }
+  function storageWorks() {
+    try { localStorage.setItem("__t", "1"); const ok = localStorage.getItem("__t") === "1"; localStorage.removeItem("__t"); return ok; }
+    catch(e) { return false; }
+  }
+  function speakThai(t) {
+    if (!t || !("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t); u.lang = "th-TH"; u.rate = .85;
+    const v = speechSynthesis.getVoices().find(x => /^th/i.test(x.lang));
+    if (v) u.voice = v;
+    speechSynthesis.speak(u);
+  }
+
+  function initExtras() {
+    if (!storageWorks()) {
+      const d = document.createElement("div");
+      d.id = "storageWarn";
+      d.style.cssText = "background:#5a2d0c;color:#ffd9b3;padding:.5rem 1rem;font-size:.85rem";
+      d.textContent = "⚠ Le stockage du navigateur est indisponible : ta progression ne sera pas conservée. Ouvre cet outil depuis ton adresse GitHub, ou exporte-la à la fin de chaque séance.";
+      document.querySelector("header").insertAdjacentElement("afterend", d);
+    } else if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+    $("speakBtn").addEventListener("click", () => speakThai(corrThai.textContent));
+    $("ficheSyncBtn").addEventListener("click", () => syncFromDB(true).then(r => { if (r) afterFiche(r, "lecture directe"); }));
+    $("ficheFileBtn").addEventListener("click", () => $("ficheFile").click());
+    $("ficheFile").addEventListener("change", e => {
+      const f = e.target.files[0]; if (!f) return;
+      f.text().then(t => {
+        try { afterFiche(mergeFiche(cardsFromFile(JSON.parse(t))), "fichier importé"); }
+        catch(err) { updateFicheStatus("fichier non reconnu"); alert("Ce fichier n'est pas un envoi de la fiche."); }
+        e.target.value = "";
+      });
+    });
+    updateFicheStatus(); updateBackupInfo();
+    syncFromDB(false).then(r => {
+      if (r && (r.added || r.changed || r.flagged)) afterFiche(r, "mise à jour automatique depuis la fiche");
+      else updateFicheStatus();
+    });
+  }
+
+  function init() {
+    loadProgress();
+    loadFiche();
+    applyFiche();
+    fillScenarioSelect();
+    modeSelect.value = currentMode;
+    if (currentMode === "orthographe") orthoVariantLabel.style.display = "flex";
+
+    document.querySelectorAll(".tab").forEach(t =>
+      t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+    scenarioSelect.addEventListener("change", () => {
+      currentScenario = scenarioSelect.value;
+      saveProgress(); rebuildPool();
+    });
+    modeSelect.addEventListener("change", () => {
+      currentMode = modeSelect.value;
+      orthoVariantLabel.style.display = currentMode === "orthographe" ? "flex" : "none";
+      saveProgress(); rebuildPool();
+    });
+    orthoVariant.addEventListener("change", () => {
+      if (currentMode === "orthographe") renderOrtho();
+    });
+    dueOnly.addEventListener("change", () => rebuildPool());
+    kbToggle.addEventListener("click", () => {
+      const target = currentMode === "orthographe" ? keyboard2 : keyboard;
+      target.classList.toggle("open");
+    });
+
+    checkBtn.addEventListener("click", handleCheck);
+    showBtn.addEventListener("click", handleShow);
+    markBtn.addEventListener("click", handleMark);
+    nextBtn.addEventListener("click", next);
+    evalOk.addEventListener("click", () => registerSelfEval(true));
+    evalKo.addEventListener("click", () => registerSelfEval(false));
+    $("structNext").addEventListener("click", nextStructure);
+
+    orthoCheckBtn.addEventListener("click", handleOrthoCheck);
+    orthoShowBtn.addEventListener("click", handleOrthoShow);
+    orthoMarkBtn.addEventListener("click", handleOrthoMark);
+    orthoNextBtn.addEventListener("click", nextOrtho);
+
+    $("exportBtn").addEventListener("click", exportProgress);
+    $("importBtn").addEventListener("click", () => {
+      if (exportArea.value.trim()) importFromTextarea();
+      else importProgress();
+    });
+    importFile.addEventListener("change", handleImportFile);
+    $("resetProgressBtn").addEventListener("click", resetAllProgress);
+
+    answerInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && (e.ctrlKey||e.metaKey)) { e.preventDefault(); handleCheck(); }
+    });
+    blankInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); handleOrthoCheck(); }
+    });
+    prefixInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && (e.ctrlKey||e.metaKey)) { e.preventDefault(); handleOrthoCheck(); }
+    });
+
+    // Écouteur global pour enregistrer le focus sur tous les champs de saisie dynamiques
+    document.addEventListener("focusin", (e) => {
+      if (e.target.matches("input[type=text], textarea")) {
+        activeInput = e.target;
+      }
+    });
+
+    buildKeyboard();
+    rebuildPool();
+    updateScore();
+    initExtras();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
