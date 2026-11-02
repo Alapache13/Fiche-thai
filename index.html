@@ -49,6 +49,7 @@
   .gut{flex:none;width:var(--gut);display:flex;align-items:center;justify-content:center;gap:3px}
   .gut button{min-height:0;height:30px;width:28px;padding:0;font-size:13px;border-radius:8px;box-shadow:none}
   .gut .rn{font-weight:600;color:var(--mut)}
+  .gut .rn.miss{border-color:var(--warn);color:var(--warn);background:#fff6e5}
   .gut .st.s1{background:#e6f6ec;border-color:#b6e2c6;color:var(--ok);font-weight:700}
   .gut .st.s2{background:#fde8e6;border-color:#f3b9b4;color:var(--bad);font-weight:700}
   .gut .sp{opacity:.45} .gut .sp.has{opacity:1}
@@ -89,7 +90,7 @@
 <body>
 <div id="app">
   <header id="bar">
-    <div class="grp"><select id="selSheet" title="Feuille"></select><button id="bSheets" title="Gérer les feuilles">📚</button></div>
+    <div class="grp"><select id="selSheet" title="Feuille"></select><button id="bSheets" title="Gérer les feuilles">📚</button><button id="bFinish" title="Terminer la feuille / réviser"></button><button id="bRev" title="Tableau de bord des révisions"></button></div>
     <span class="sep"></span>
     <div class="grp"><button id="bPrev">◀</button><select id="selView" title="Vue"></select><button id="bNext">▶</button><button id="bReveal"></button></div>
     <span class="sep"></span>
@@ -147,7 +148,7 @@ const COL_A="#2f6fe4", COL_B="#d93025";
 
 /* ═══════════════ état ═══════════════ */
 const S={colW:{...DEF_COLW},rowH:72,guides:true,autoGrow:true,simple:false,fingerMode:"scroll",
-  tool:"pen",color:"#1c1c1e",width:2.4,view:0,sheet:null,filter:0,lastExport:0};
+  tool:"pen",color:"#1c1c1e",width:2.4,view:0,sheet:null,filter:0,lastExport:0,log:{},goal:10};
 let sheets=[], cur=null;
 let Z=1, zoomMode="fit";
 let answerHidden=false; const revealed=new Set();
@@ -173,10 +174,10 @@ const ck=(col,row)=>col+"_"+row;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const sc=$("sheet"), stage=$("stage");
 
-function newSheet(name){return {id:uid(),name,nRows:10,cells:{},rows:{},t:Date.now()};}
+function newSheet(name){return {id:uid(),name,nRows:10,cells:{},rows:{},rev:null,t:Date.now()};}
 function cellOf(sh,key,create){let c=sh.cells[key]; if(!c&&create){c=sh.cells[key]={s:[]};} return c;}
 function pruneCell(sh,key){const c=sh.cells[key]; if(c&&!c.s.length&&!c.bg) delete sh.cells[key];}
-function rowInfo(r){return cur.rows[r]||(cur.rows[r]={st:0,ref:""});}
+function rowInfo(r){return cur.rows[r]||(cur.rows[r]={st:0,ref:"",fr:""});}
 
 /* ═══════════════ toast ═══════════════ */
 let toastT=null;
@@ -389,12 +390,15 @@ function makeGut(r){
   const sp=el("button","sp","🔊");
   sp.onclick=()=>{const t=(cur.rows[r]||{}).ref; if(t) speak(t); else openRowModal(r);};
   g.append(n,st,sp);
-  const o={el:g,row:r,st,sp}; guts.push(o); refreshGutOne(o); return g;
+  const o={el:g,row:r,st,sp,rn:n}; guts.push(o); refreshGutOne(o); return g;
 }
 function refreshGutOne(o){
   const info=cur.rows[o.row]||{}, s=info.st|0;
   o.st.className="st"+(s?" s"+s:""); o.st.textContent=STG[s];
   o.sp.className="sp"+(info.ref?" has":"");
+  const miss=rowHasInk(cur,o.row)&&!(info.ref&&info.fr);
+  o.rn.className="rn"+(miss?" miss":"");
+  o.rn.title=miss?"Ligne écrite : tape le thaï et le français":"Ligne "+(o.row+1)+" : texte thaï et français";
 }
 function refreshGut(r){guts.forEach(o=>{if(o.row===r)refreshGutOne(o);});}
 
@@ -720,6 +724,8 @@ function refreshBar(){
   rv.textContent=answerHidden?"👁 Tout révéler":"🙈 Masquer la réponse"; rv.classList.toggle("on",answerHidden);
   $("selView").value=String(S.view); $("selSheet").value=cur.id;
   $("bMenu").classList.toggle("alert",needBackup());
+  refreshRev();
+  guts.forEach(refreshGutOne);
   updateStats();
 }
 function fillSelects(){
@@ -729,7 +735,7 @@ function fillSelects(){
 }
 function fillSheetSelect(){
   const s=$("selSheet"); s.innerHTML="";
-  sheets.forEach(sh=>{const o=el("option",null,sh.name); o.value=sh.id; s.appendChild(o);});
+  sheets.forEach(sh=>{const o=el("option",null,sh.name+(isDue(sh)?"  🔔":(sh.rev&&sh.rev.on?"  ✅":""))); o.value=sh.id; s.appendChild(o);});
   s.value=cur.id;
 }
 function setView(i){
@@ -780,11 +786,12 @@ const doFit=()=>{
   if(zoomMode==="fit"&&sc.clientWidth!==lastFitW){dlogRaw("resize → ajustement");fit();}
 };
 window.addEventListener("resize",()=>{clearTimeout(rzT);rzT=setTimeout(doFit,150);});
-document.addEventListener("visibilitychange",()=>{if(document.hidden)flush(true);});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)flush(true); else refreshBar();});
 window.addEventListener("pagehide",()=>flush(true));
 
 /* ═══════════════ modales ═══════════════ */
 function openModal(title,body,actions){
+  modalHook=null;
   const m=$("modal"),box=m.firstElementChild; box.innerHTML="";
   box.appendChild(el("h3",null,title));
   const bd=el("div","mbody"); bd.appendChild(body); box.appendChild(bd);
@@ -796,32 +803,46 @@ function openModal(title,body,actions){
   }
   box.appendChild(ac); m.classList.add("open");
 }
-function closeModal(){$("modal").classList.remove("open");}
+let modalHook=null;
+function closeModal(){$("modal").classList.remove("open");const h=modalHook;modalHook=null;if(h)h();}
 $("modal").addEventListener("pointerdown",e=>{if(e.target===$("modal"))closeModal();});
 
 function openRowModal(r){
+  const info=cur.rows[r]||{};
   const body=el("div"); body.style.display="contents";
-  const ta=document.createElement("textarea"); ta.rows=3; ta.lang="th";
-  ta.value=(cur.rows[r]||{}).ref||""; ta.placeholder="Texte thaï de référence (facultatif) — sert au bouton 🔊";
-  body.append(el("p",null,"Tape ici le texte thaï correspondant à cette ligne pour pouvoir l'écouter avec la voix de l'iPad."),ta);
-  const save=()=>{const v=ta.value.trim(),ri=rowInfo(r); if(v!==(ri.ref||"")){ri.ref=v;markDirty(cur,[]);refreshGut(r);}};
-  openModal("Ligne "+(r+1),body,[
-    {t:"🔊 Écouter",keep:true,f:()=>{save();const v=ta.value.trim(); if(v)speak(v);}},
-    {t:"Vider la ligne",cls:"bad",f:()=>{save();clearRow(r);}},
+  const ta=document.createElement("textarea"); ta.rows=2; ta.lang="th"; ta.value=info.ref||""; ta.placeholder="Texte thaï (clavier thaï)";
+  const fr=document.createElement("input"); fr.type="text"; fr.lang="fr"; fr.value=info.fr||""; fr.placeholder="Traduction française";
+  fr.style.cssText="width:100%;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:10px";
+  body.append(el("p",null,"Le thaï sert à la voix 🔊 et aux cartes de révision, le français à leur réponse. Entrée dans le champ français : ligne suivante."),
+    el("div","sec","Thaï"),ta,el("div","sec","Français"),fr);
+  const save=()=>{
+    const a=ta.value.trim(),b=fr.value.trim(),ri=cur.rows[r];
+    if((ri?ri.ref||"":"")!==a||(ri?ri.fr||"":"")!==b){const x=rowInfo(r);x.ref=a;x.fr=b;markDirty(cur,[]);}
+    refreshGut(r);
+  };
+  const go=d=>{save();const n=r+d;if(n<0||n>=cur.nRows){toast(d>0?"Dernière ligne de la feuille":"Première ligne");return;}openRowModal(n);};
+  fr.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();go(1);}});
+  openModal("Ligne "+(r+1)+" / "+cur.nRows,body,[
+    {t:"◀",keep:true,f:()=>go(-1)},
+    {t:"▶ Suivante",keep:true,f:()=>go(1)},
+    {t:"🔊 Écouter",keep:true,f:()=>{save();const v=ta.value.trim();if(v)speak(v);}},
+    {t:"Effacer le tracé",cls:"bad",f:()=>{save();clearRow(r);}},
     {t:"OK",cls:"on",f:save}
   ]);
+  modalHook=save;
+  (ta.value?fr:ta).focus();
 }
 
 function openSheets(){
   const body=el("div");
   body.style.display="contents";
   sheets.forEach(sh=>{
-    const row=el("div","srow"); const nm=el("button","nm",sh.name+(sh===cur?"  ✓":"")); if(sh===cur)nm.classList.add("on");
+    const row=el("div","srow"); const nm=el("button","nm",sh.name+(isDue(sh)?" 🔔":"")+(sh===cur?"  ✓":"")); if(sh===cur)nm.classList.add("on");
     nm.onclick=()=>{closeModal();switchSheet(sh.id);};
     const rn=el("button",null,"✎"); rn.title="Renommer";
     rn.onclick=()=>{const n=prompt("Nom de la feuille :",sh.name); if(n&&n.trim()){sh.name=n.trim();markDirty(sh,[]);fillSheetSelect();openSheets();}};
     const dp=el("button",null,"⧉"); dp.title="Dupliquer";
-    dp.onclick=()=>{const c=JSON.parse(JSON.stringify(sh)); c.id=uid(); c.name=sh.name+" (copie)"; sheets.push(c); markDirty(c); saveMeta(); fillSheetSelect(); openSheets();};
+    dp.onclick=()=>{const c=JSON.parse(JSON.stringify(sh)); c.id=uid(); c.name=sh.name+" (copie)"; c.rev=null; sheets.push(c); markDirty(c); saveMeta(); fillSheetSelect(); openSheets();};
     const dl=el("button",null,"🗑"); dl.title="Supprimer";
     dl.onclick=()=>{
       if(sheets.length<2){toast("Il faut garder au moins une feuille");return;}
@@ -842,6 +863,24 @@ function openSheets(){
   ]);
 }
 
+function buildCards(){
+  const out=[];let total=0,ko=0;
+  sheets.forEach(sh=>{
+    const lines=[];
+    for(let r=0;r<sh.nRows;r++){
+      const i=sh.rows[r];
+      if(i&&i.ref&&i.fr){lines.push({n:r+1,thai:i.ref,fr:i.fr,st:i.st|0});if((i.st|0)===2)ko++;}
+    }
+    if(lines.length){out.push({id:sh.id,name:sh.name,lines});total+=lines.length;}
+  });
+  return {total,ko,data:{app:"fiche-thai-cartes",v:1,exported:new Date().toISOString(),sheets:out}};
+}
+function sendToRevision(){
+  const c=buildCards();
+  if(!c.total){toast("Aucune ligne n'a encore son thaï et son français tapés",4200);return;}
+  saveFile(new Blob([JSON.stringify(c.data)],{type:"application/json"}),"cartes-thai-"+today()+".json").then(ok=>{
+    if(ok)toast(c.total+" carte(s) prête(s), dont "+c.ko+" marquée(s) ✗",4000);});
+}
 function openMenu(){
   const body=el("div"); body.style.display="contents";
   const sec=(t,nodes)=>{body.appendChild(el("div","sec",t)); const g=el("div","btns"); nodes.forEach(n=>g.appendChild(n)); body.appendChild(g);};
@@ -862,6 +901,9 @@ function openMenu(){
     btn("− Dernière ligne",()=>{closeModal();removeLastRow();}),
     btn("Vider la feuille",()=>{closeModal(); if(confirm("Vider toute la feuille ? (annulable avec ↶)"))clearSheet();},false,"bad")
   ]);
+  sec("Révision thaï",[
+    btn("📚 Envoyer mes lignes vers la révision",()=>{closeModal();sendToRevision();})
+  ]);
   sec("Diagnostic",[
     btn("Diagnostic du stylet : "+(diag?"oui":"non"),()=>{diag=!diag;dlines.length=0;$("dbg").textContent="";$("dbg").style.display=diag?"block":"none";reopen();},diag)
   ]);
@@ -872,7 +914,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 5.5 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 5.8 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
@@ -893,7 +935,7 @@ async function saveFile(blob,name){
 }
 const today=()=>new Date().toISOString().slice(0,10);
 function exportJSON(){
-  const data={app:"fiche-thai",v:5,exported:new Date().toISOString(),settings:{colW:S.colW,rowH:S.rowH},sheets};
+  const data={app:"fiche-thai",v:5,exported:new Date().toISOString(),settings:{colW:S.colW,rowH:S.rowH,log:S.log,goal:S.goal},sheets};
   saveFile(new Blob([JSON.stringify(data)],{type:"application/json"}),"fiche-thai-"+today()+".json").then(ok=>{
     if(ok){S.lastExport=Date.now();saveMeta();refreshBar();toast("Sauvegarde exportée");}
   });
@@ -953,7 +995,7 @@ function legacySheets(o,widths){
   return out;
 }
 function normSheet(s){
-  return {id:uid(),name:String(s.name||"Feuille"),nRows:clamp(s.nRows|0||10,1,60),cells:s.cells||{},rows:s.rows||{},t:Date.now()};
+  return {id:uid(),name:String(s.name||"Feuille"),nRows:clamp(s.nRows|0||10,1,60),cells:s.cells||{},rows:s.rows||{},rev:(s.rev&&typeof s.rev==="object")?s.rev:null,t:Date.now()};
 }
 function parseBackup(txt){
   const o=JSON.parse(txt);
@@ -982,7 +1024,7 @@ function confirmImport(r){
   const apply=replace=>{
     if(replace){sheets.forEach(s=>dropSheetData(s.id));dirty.clear();sheets=[];}
     r.sheets.forEach(s=>{sheets.push(s);markDirty(s);});
-    if(r.settings&&replace){if(r.settings.colW)Object.assign(S.colW,r.settings.colW); if(r.settings.rowH)S.rowH=r.settings.rowH;}
+    if(r.settings&&replace){if(r.settings.colW)Object.assign(S.colW,r.settings.colW); if(r.settings.rowH)S.rowH=r.settings.rowH; if(r.settings.log&&typeof r.settings.log==="object")S.log=r.settings.log; if(r.settings.goal>0)S.goal=r.settings.goal;}
     cur=replace?sheets[0]:r.sheets[0]; S.sheet=cur.id; undoStack=[];redoStack=[];revealed.clear();
     saveMeta(); fillSheetSelect(); rebuild(true); toast("Import réussi");
   };
@@ -992,6 +1034,129 @@ function confirmImport(r){
     {t:"Tout remplacer",cls:"bad",f:()=>{if(confirm("Remplacer TOUTES les feuilles actuelles ?"))apply(true);}}
   ]);
 }
+
+/* ═══════════════ révisions espacées (type Anki) ═══════════════ */
+const pad2=n=>String(n).padStart(2,"0");
+function dstr(d){d=d||new Date();return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());}
+function parseD(ds){const p=ds.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]);}
+function addDays(ds,n){const d=parseD(ds);d.setDate(d.getDate()+n);return dstr(d);}
+function daysBetween(a,b){const x=parseD(a),y=parseD(b);return Math.round((Date.UTC(y.getFullYear(),y.getMonth(),y.getDate())-Date.UTC(x.getFullYear(),x.getMonth(),x.getDate()))/864e5);}
+function fmtD(ds){return parseD(ds).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"});}
+function inDays(ds){const n=daysBetween(dstr(),ds);return n<0?"en retard de "+(-n)+" j":n===0?"aujourd'hui":n===1?"demain":"dans "+n+" j";}
+function countLines(sh){const rows=new Set();for(const k in sh.cells){const c=sh.cells[k];if(c&&((c.s&&c.s.length)||c.bg))rows.add(k.split("_")[1]);}return rows.size;}
+function countKo(sh){let n=0;for(let r=0;r<sh.nRows;r++){if(sh.rows[r]&&(sh.rows[r].st|0)===2)n++;}return n;}
+function isDue(sh){const r=sh.rev;return !!(r&&r.on&&r.due<=dstr());}
+function logAdd(f,n){
+  const t=dstr();if(!S.log||typeof S.log!=="object")S.log={};
+  const L=S.log[t]||(S.log[t]={n:0,r:0,s:0});L[f]=(L[f]||0)+n;
+  const ks=Object.keys(S.log).sort();while(ks.length>70)delete S.log[ks.shift()];
+}
+function scheduleSheet(sh,due){
+  const t=dstr(),ivl=Math.max(1,daysBetween(t,due));
+  if(sh.rev&&sh.rev.on){sh.rev.due=due;sh.rev.ivl=ivl;}
+  else{sh.rev={on:true,due:due,ivl:ivl,ease:2.5,reps:0,lapses:0,fin:t,last:null};logAdd("n",countLines(sh));logAdd("s",1);}
+  markDirty(sh,[]);saveMeta();refreshBar();
+}
+function nextIvl(r,g){
+  const ivl=Math.max(1,r.ivl||1),e=r.ease||2.5;
+  if(g===0)return 1;
+  if(g===1)return Math.max(ivl+1,Math.round(ivl*1.2));
+  if(g===2)return Math.max(ivl+1,Math.round(ivl*e));
+  return Math.max(ivl+2,Math.round(ivl*e*1.3));
+}
+function gradeSheet(sh,g){
+  const r=sh.rev,t=dstr(),ivl=nextIvl(r,g);
+  r.ease=clamp((r.ease||2.5)+[-.2,-.15,0,.15][g],1.3,3);
+  if(g===0)r.lapses=(r.lapses||0)+1;
+  r.reps=(r.reps||0)+1;r.ivl=ivl;r.due=addDays(t,ivl);r.last=t;
+  logAdd("r",countLines(sh));logAdd("s",1);
+  markDirty(sh,[]);saveMeta();refreshBar();
+  return r.due;
+}
+function refreshRev(){
+  const nd=sheets.filter(isDue).length,r=cur.rev,b=$("bFinish"),rb=$("bRev");
+  rb.textContent="📅 Révisions"+(nd?" · "+nd:"");rb.classList.toggle("on",nd>0);
+  if(r&&r.on){
+    if(r.due<=dstr()){b.textContent="🔔 À revoir";b.classList.add("on");}
+    else{b.textContent="✅ Revue "+fmtD(r.due);b.classList.remove("on");}
+  }else{b.textContent="✅ Terminer";b.classList.remove("on");}
+  fillSheetSelect();
+}
+function rowHasInk(sh,r){for(let c=1;c<=8;c++){const x=sh.cells[ck(c,r)];if(x&&((x.s&&x.s.length)||x.bg))return true;}return false;}
+function missingRows(sh){const o=[];for(let r=0;r<sh.nRows;r++){const i=sh.rows[r];if(rowHasInk(sh,r)&&!(i&&i.ref&&i.fr))o.push(r);}return o;}
+function openFinish(sh){
+  const r=sh.rev;
+  if(r&&r.on&&r.due<=dstr()){openGrade(sh);return;}
+  const on=!!(r&&r.on),body=el("div");body.style.display="contents";
+  if(on){
+    body.append(el("p",null,"Prochaine révision : "+fmtD(r.due)+" ("+inDays(r.due)+")."),
+      el("p",null,"Terminée le "+fmtD(r.fin)+" · révisions : "+(r.reps||0)+" · oublis : "+(r.lapses||0)+" · intervalle : "+r.ivl+" j"));
+  }else body.append(el("p",null,countLines(sh)+" ligne(s) écrite(s). Quand veux-tu la revoir ?"));
+  const miss=missingRows(sh);
+  if(miss.length)body.appendChild(el("p",null,"⚠ "+miss.length+" ligne(s) écrite(s) sans texte tapé (thaï + français) : elles ne pourront pas devenir des cartes de révision."));
+  const set=due=>{closeModal();scheduleSheet(sh,due);toast("Révision prévue "+fmtD(due)+" ("+inDays(due)+")",3200);};
+  const q=el("div","btns");
+  [[1,"Demain"],[3,"Dans 3 jours"],[7,"Dans 1 semaine"],[14,"Dans 2 semaines"]].forEach(a=>{
+    const b=el("button",!on&&a[0]===3?"on":"",a[1]);b.onclick=()=>set(addDays(dstr(),a[0]));q.appendChild(b);});
+  const di=document.createElement("input");di.type="date";di.min=dstr();di.value=addDays(dstr(),3);
+  di.style.cssText="width:100%;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:10px";
+  body.append(q,el("div","sec",on?"Changer la date":"Ou choisir une date"),di);
+  const acts=[{t:"Annuler"}];
+  if(miss.length)acts.push({t:"Saisir les lignes manquantes",f:()=>openRowModal(miss[0])});
+  if(on){
+    acts.push({t:"Rouvrir (retirer du suivi)",cls:"bad",f:()=>{if(!confirm("Retirer « "+sh.name+" » du suivi de révision ?"))return;sh.rev=null;markDirty(sh,[]);refreshBar();toast("Feuille rouverte");}});
+    acts.push({t:"Réviser maintenant",f:()=>openGrade(sh)});
+  }
+  acts.push({t:on?"Changer la date":"Terminer",cls:"on",keep:true,f:()=>{
+    if(!di.value){toast("Choisis une date");return;}
+    if(di.value<dstr()){toast("Cette date est déjà passée");return;}
+    set(di.value);}});
+  openModal(on?"Feuille terminée":"Terminer « "+sh.name+" »",body,acts);
+}
+function openGrade(sh){
+  const r=sh.rev;if(!r)return;
+  const ko=countKo(sh),body=el("div");body.style.display="contents";
+  body.append(el("p",null,"Révision prévue "+inDays(r.due)+" ("+fmtD(r.due)+")"+(ko?" · "+ko+" ligne(s) marquée(s) ✗":"")+"."),
+    el("p",null,"Réécris ou relis la feuille (astuce : vues « 2+3 » ou « 3+4 » avec la réponse masquée), puis note comment ça s'est passé. Le délai affiché est celui de la prochaine révision."));
+  const nm=["Encore","Difficile","Bien","Facile"],cl=["bad","","on",""],acts=[{t:"Plus tard"}];
+  for(let g=0;g<4;g++)acts.push({t:nm[g]+" · "+nextIvl(r,g)+" j",cls:cl[g],f:()=>{const d=gradeSheet(sh,g);toast("Prochaine révision : "+fmtD(d)+" ("+inDays(d)+")",3200);}});
+  openModal("Réviser « "+sh.name+" »",body,acts);
+}
+function openRevisions(){
+  const body=el("div");body.style.display="contents";
+  const t=dstr(),L=S.log[t]||{n:0,r:0,s:0},done=(L.n||0)+(L.r||0),goal=S.goal||10;
+  const bar=(v,h)=>{const o=el("div");o.style.cssText="flex:1;height:"+h+"px;border-radius:"+(h/2)+"px;background:#e5e5ea;overflow:hidden";
+    const f=el("div");f.style.cssText="height:100%;width:"+Math.min(100,Math.round(v/goal*100))+"%;background:"+(v>=goal?"var(--ok)":"var(--acc)");o.appendChild(f);return o;};
+  const goTo=(sh,fn)=>{closeModal();switchSheet(sh.id);setTimeout(()=>fn(sh),30);};
+  const item=(txt,cls,fn)=>{const b=el("button",cls,txt);b.style.textAlign="left";b.onclick=fn;return b;};
+  body.appendChild(el("div","sec","Aujourd'hui"));
+  const pr=el("div","srow");pr.appendChild(bar(done,14));body.appendChild(pr);
+  body.appendChild(el("p",null,done+" / "+goal+" lignes ("+(L.n||0)+" nouvelles, "+(L.r||0)+" révisées)"+(done>=goal?" — objectif atteint ✓":"")));
+  let streak=0;for(let i=0;i<70;i++){const x=S.log[addDays(t,-i)],v=x?(x.n||0)+(x.r||0):0;if(v>=goal)streak++;else if(i===0)continue;else break;}
+  if(streak)body.appendChild(el("p",null,"Série : "+streak+" jour(s) de suite"));
+  const gb=el("button",null,"Objectif : "+goal+" lignes par jour (modifier)");
+  gb.onclick=()=>{const v=parseInt(prompt("Objectif de lignes par jour :",goal),10);if(v>0){S.goal=clamp(v,1,500);saveMeta();openRevisions();}};
+  body.appendChild(gb);
+  const due=sheets.filter(isDue).sort((a,b)=>a.rev.due<b.rev.due?-1:1);
+  body.appendChild(el("div","sec","À revoir aujourd'hui ("+due.length+")"));
+  if(!due.length)body.appendChild(el("p",null,"Rien à revoir pour l'instant 🎉"));
+  due.forEach(sh=>body.appendChild(item("🔔 "+sh.name+" · "+inDays(sh.rev.due)+" · "+countLines(sh)+" lignes","on",()=>goTo(sh,openGrade))));
+  const up=sheets.filter(sh=>sh.rev&&sh.rev.on&&!isDue(sh)).sort((a,b)=>a.rev.due<b.rev.due?-1:1);
+  if(up.length){body.appendChild(el("div","sec","À venir"));
+    up.forEach(sh=>body.appendChild(item("✅ "+sh.name+" · "+fmtD(sh.rev.due)+" ("+inDays(sh.rev.due)+")","",()=>goTo(sh,openFinish))));}
+  const pend=sheets.filter(sh=>!(sh.rev&&sh.rev.on)&&countLines(sh)>0);
+  if(pend.length){body.appendChild(el("div","sec","Pas encore terminées"));
+    pend.forEach(sh=>body.appendChild(item("📝 "+sh.name+" · "+countLines(sh)+" lignes","",()=>goTo(sh,openFinish))));}
+  body.appendChild(el("div","sec","7 derniers jours"));
+  for(let i=6;i>=0;i--){
+    const d=addDays(t,-i),x=S.log[d]||{n:0,r:0},v=(x.n||0)+(x.r||0),row=el("div","srow");
+    const lab=el("span",null,fmtD(d));lab.style.cssText="width:92px;font-size:13px;color:var(--mut)";
+    const num=el("span",null,String(v));num.style.cssText="width:34px;text-align:right;font-size:13px";
+    row.append(lab,bar(v,10),num);body.appendChild(row);}
+  openModal("Révisions",body,[{t:"Fermer",cls:"on"}]);
+}
+$("bFinish").onclick=()=>openFinish(cur);
+$("bRev").onclick=openRevisions;
 
 /* ═══════════════ démarrage ═══════════════ */
 async function boot(){
@@ -1031,6 +1196,7 @@ async function boot(){
   if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
   if(store.mode==="mem") toast("⚠ Stockage indisponible : exporte régulièrement (⋯ › Exporter)",6000);
   else if(migrated) toast(migrated+" ancienne(s) feuille(s) reprise(s) automatiquement",4000);
+  else if(sheets.some(isDue)) toast("🔔 "+sheets.filter(isDue).length+" feuille(s) à revoir aujourd'hui (📅 Révisions)",5000);
   else if(needBackup()) toast("Pense à exporter une sauvegarde (⋯ › Exporter)",4000);
 }
 boot();
