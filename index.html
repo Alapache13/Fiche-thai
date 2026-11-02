@@ -82,6 +82,8 @@
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:rgba(28,28,30,.92);color:#fff;
     padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%)}
+  #dbg{display:none;position:fixed;left:8px;bottom:8px;margin:0;padding:6px 8px;background:rgba(0,0,0,.78);color:#9ef59e;
+    font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;z-index:70;pointer-events:none;max-width:90vw}
 </style>
 </head>
 <body>
@@ -115,6 +117,7 @@
 </div>
 <div id="modal"><div class="mbox"></div></div>
 <div id="toast"></div>
+<pre id="dbg"></pre>
 
 <script>
 (()=>{
@@ -153,6 +156,16 @@ let undoStack=[], redoStack=[];
 let seq=0; const nextId=()=>Date.now()*100+((seq++)%100);
 
 const $=id=>document.getElementById(id);
+let diag=false; const dlines=[]; let dlast=0;
+function dlogRaw(t){ if(!diag) return; dlines.push(t); if(dlines.length>8) dlines.shift(); $("dbg").textContent=dlines.join("\n"); }
+(()=>{let hb=performance.now(); setInterval(()=>{const n=performance.now(),gap=n-hb-100; hb=n; if(gap>120) dlogRaw("⚠ gel de l'écran "+Math.round(gap)+" ms");},100);})();
+function dlog(e,tag){
+  if(!diag) return;
+  const t=Math.round(e.timeStamp);
+  dlines.push(tag+" "+e.pointerType+"#"+e.pointerId+" b"+e.buttons+" p"+(e.pressure||0).toFixed(2)+" actif="+(active?1:0)+" +"+(t-dlast)+"ms");
+  dlast=t; if(dlines.length>8) dlines.shift();
+  $("dbg").textContent=dlines.join("\n");
+}
 const el=(t,c,x)=>{const e=document.createElement(t); if(c)e.className=c; if(x!=null)e.textContent=x; return e;};
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const r1=v=>Math.round(v*10)/10;
@@ -171,6 +184,26 @@ function toast(msg,ms){const t=$("toast"); t.textContent=msg; t.classList.add("s
 
 /* ═══════════════ stockage (IndexedDB, repli mémoire) ═══════════════ */
 const store={mode:"idb",db:null,mem:new Map(),
+  keys(prefix){
+    if(this.mode==="mem") return Promise.resolve([...this.mem.keys()].filter(k=>k.startsWith(prefix)));
+    return new Promise((res,rej)=>{const q=this.db.transaction("kv").objectStore("kv").getAllKeys(IDBKeyRange.bound(prefix,prefix+"￿")); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);});
+  },
+  rangeAll(prefix){
+    if(this.mode==="mem"){const o={}; for(const [k,v] of this.mem) if(k.startsWith(prefix)) o[k.slice(prefix.length)]=v; return Promise.resolve(o);}
+    return new Promise((res,rej)=>{
+      const os=this.db.transaction("kv").objectStore("kv"),rg=IDBKeyRange.bound(prefix,prefix+"￿");
+      const kq=os.getAllKeys(rg),vq=os.getAll(rg); vq.onerror=()=>rej(vq.error);
+      vq.onsuccess=()=>{const o={}; kq.result.forEach((k,i)=>{o[String(k).slice(prefix.length)]=vq.result[i];}); res(o);};
+    });
+  },
+  batch(ops){ // ops : ["put",clé,valeur] ou ["del",clé] — une seule transaction (tout ou rien)
+    if(this.mode==="mem"){ops.forEach(o=>o[0]==="put"?this.mem.set(o[1],o[2]):this.mem.delete(o[1])); return Promise.resolve();}
+    return new Promise((res,rej)=>{
+      const tx=this.db.transaction("kv","readwrite"),os=tx.objectStore("kv");
+      ops.forEach(o=>o[0]==="put"?os.put(o[2],o[1]):os.delete(o[1]));
+      tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);
+    });
+  },
   async open(){
     try{
       if(!("indexedDB" in window)) throw new Error("no idb");
@@ -198,20 +231,45 @@ const store={mode:"idb",db:null,mem:new Map(),
   }
 };
 
-const dirty=new Set(); let saveT=null;
+const dirty=new Map(); let saveT=null; const cellKey=(id,k)=>"cell:"+id+"|"+k;
 function setSave(state){
   const i=$("saveInd"); i.className=state==="busy"?"busy":state==="err"?"err":"";
   i.textContent=state==="busy"?"…":state==="err"?"⚠":"✓";
   i.title=state==="err"?"Sauvegarde impossible — exporte ta feuille !":store.mode==="mem"?"Mode temporaire : rien n'est conservé après fermeture":"Sauvegardé";
 }
-function markDirty(sh){dirty.add(sh.id); setSave("busy"); clearTimeout(saveT); saveT=setTimeout(flush,500);}
+function markDirty(sh,keys){ // keys absent = feuille entière ; tableau = seulement ces cellules (+ infos de la feuille)
+  let d=dirty.get(sh.id); if(!d){d={full:false,keys:new Set()};dirty.set(sh.id,d);}
+  if(keys===undefined) d.full=true; else keys.forEach(k=>d.keys.add(k));
+  setSave("busy"); clearTimeout(saveT); saveT=setTimeout(flush,600);
+}
 async function flush(){
   clearTimeout(saveT); if(!dirty.size) return;
-  const ids=[...dirty]; dirty.clear();
+  const batch=[...dirty.entries()]; dirty.clear();
+  const t0=performance.now(); let nCells=0;
   try{
-    for(const id of ids){const sh=sheets.find(s=>s.id===id); if(sh) await store.put("sheet:"+id,sh);}
+    const ops=[];
+    for(const [id,d] of batch){
+      const sh=sheets.find(x=>x.id===id); if(!sh) continue;
+      const {cells,...meta}=sh; meta.fmt=2; ops.push(["put","sheet:"+id,meta]);
+      if(d.full){
+        const have=await store.keys(cellKey(id,""));
+        for(const k of Object.keys(sh.cells)){ops.push(["put",cellKey(id,k),sh.cells[k]]);nCells++;}
+        for(const fk of have){const k=fk.slice(cellKey(id,"").length); if(!sh.cells[k]) ops.push(["del",fk]);}
+      }else{
+        for(const k of d.keys){const c=sh.cells[k]; if(c){ops.push(["put",cellKey(id,k),c]);nCells++;} else ops.push(["del",cellKey(id,k)]);}
+      }
+    }
+    await store.batch(ops);
     setSave(store.mode==="mem"?"err":"ok");
-  }catch(e){console.error(e); ids.forEach(i=>dirty.add(i)); setSave("err");}
+    dlogRaw("sauvegarde "+Math.round(performance.now()-t0)+" ms ("+nCells+" cellule(s))");
+  }catch(e){
+    console.error(e);
+    batch.forEach(([id,d])=>{const x=dirty.get(id)||{full:false,keys:new Set()}; x.full=x.full||d.full; d.keys.forEach(k=>x.keys.add(k)); dirty.set(id,x);});
+    setSave("err");
+  }
+}
+function dropSheetData(id){
+  store.keys(cellKey(id,"")).then(ks=>store.batch([["del","sheet:"+id],...ks.map(k=>["del",k])])).catch(()=>{});
 }
 function saveMeta(){
   store.put("meta",{v:5,ids:sheets.map(s=>s.id),S:{...S}}).catch(e=>{console.error(e); setSave("err");});
@@ -321,7 +379,7 @@ function makeGut(r){
   const n=el("button","rn",String(r+1)); n.title="Ligne "+(r+1)+" : texte de référence, effacer la ligne";
   n.onclick=()=>openRowModal(r);
   const st=el("button","st");
-  st.onclick=()=>{const ri=rowInfo(r); ri.st=((ri.st|0)+1)%3; markDirty(cur); refreshGut(r); updateStats();};
+  st.onclick=()=>{const ri=rowInfo(r); ri.st=((ri.st|0)+1)%3; markDirty(cur,[]); refreshGut(r); updateStats();};
   const sp=el("button","sp","🔊");
   sp.onclick=()=>{const t=(cur.rows[r]||{}).ref; if(t) speak(t); else openRowModal(r);};
   g.append(n,st,sp);
@@ -394,23 +452,23 @@ function revealRow(r){revealed.add(r);updateMasks();}
 /* ═══════════════ annuler / rétablir ═══════════════ */
 function pushOp(op){
   undoStack.push(op); if(undoStack.length>300) undoStack.shift(); redoStack=[];
-  markDirty(op.sh); refreshBar();
+  markDirty(op.sh,op.keys); refreshBar();
 }
-function undo(){const op=undoStack.pop(); if(!op)return; op.undo(); redoStack.push(op); markDirty(op.sh); refreshBar();}
-function redo(){const op=redoStack.pop(); if(!op)return; op.redo(); undoStack.push(op); markDirty(op.sh); refreshBar();}
+function undo(){const op=undoStack.pop(); if(!op)return; op.undo(); redoStack.push(op); markDirty(op.sh,op.keys); refreshBar();}
+function redo(){const op=redoStack.pop(); if(!op)return; op.redo(); undoStack.push(op); markDirty(op.sh,op.keys); refreshBar();}
 function sortCell(c){c.s.sort((a,b)=>(a.i||0)-(b.i||0));}
 
 function clearCellOp(key){
   const sh=cur,c=sh.cells[key]; if(!c){return;}
   delete sh.cells[key]; redrawKeys([key]);
-  pushOp({sh,undo(){sh.cells[key]=c;redrawKeys([key]);},redo(){delete sh.cells[key];redrawKeys([key]);}});
+  pushOp({sh,keys:[key],undo(){sh.cells[key]=c;redrawKeys([key]);},redo(){delete sh.cells[key];redrawKeys([key]);}});
 }
 function clearRow(r){
   const sh=cur,snap={};
   for(let col=1;col<=8;col++){const k=ck(col,r); if(sh.cells[k]){snap[k]=sh.cells[k];delete sh.cells[k];}}
   const keys=Object.keys(snap); if(!keys.length){toast("Ligne déjà vide");return;}
   redrawKeys(keys);
-  pushOp({sh,undo(){keys.forEach(k=>sh.cells[k]=snap[k]);redrawKeys(keys);},redo(){keys.forEach(k=>delete sh.cells[k]);redrawKeys(keys);}});
+  pushOp({sh,keys,undo(){keys.forEach(k=>sh.cells[k]=snap[k]);redrawKeys(keys);},redo(){keys.forEach(k=>delete sh.cells[k]);redrawKeys(keys);}});
 }
 function clearSheet(){
   const sh=cur,snap=sh.cells; if(!Object.keys(snap).length){toast("Feuille déjà vide");return;}
@@ -480,8 +538,9 @@ function onDown(e){
   const cv=e.target.closest&&e.target.closest("canvas.cv"); if(!cv) return;
   stopInertia();
   const rec=recMap.get(cv); if(!rec) return;
+  dlog(e,"down");
   if(e.pointerType==="touch"&&(active||S.fingerMode!=="draw")){ if(!active) startTouch(e); return; }
-  if(active) return;
+  if(active) endActive();   // trait précédent resté « ouvert » : on le termine puis on enchaîne
   if(e.pointerType==="mouse"&&e.button!==0) return;
   e.preventDefault();
   if(rec.cmp){toast("Vue de comparaison : lecture seule");return;}
@@ -495,17 +554,27 @@ function onDown(e){
 function onMove(e){
   if(e.pointerType==="touch"&&touches.has(e.pointerId)){touchMove(e);return;}
   if(active&&e.pointerId===active.id){
+    if(e.pointerType!=="touch"&&e.buttons===0&&e.pressure===0){dlog(e,"fin(survol)");endActive();return;}
     e.preventDefault();
     if(active.kind==="stroke") strokeMove(e); else eraseAt(e);
   }
 }
-function onUp(e){
-  if(touches.has(e.pointerId)){endTouch(e);return;}
-  if(active&&e.pointerId===active.id){
-    if(active.kind==="stroke") finishStroke(); else finishErase();
-    active=null;
-  }
+function endActive(){
+  if(!active) return;
+  const a=active, t0=performance.now();
+  try{ if(a.kind==="stroke") finishStroke(); else finishErase(); }
+  catch(err){console.error("fin de trait",err);}
+  finally{active=null; const dt=performance.now()-t0; if(dt>30) dlogRaw("fin de trait "+Math.round(dt)+" ms");}
 }
+function onUp(e){
+  if(active&&e.pointerId===active.id){dlog(e,"up");endActive();return;}
+  if(touches.has(e.pointerId)) endTouch(e);
+}
+// filets de sécurité : la fin du geste est captée même si l'événement n'arrive pas sur la feuille
+const safeEnd=e=>{if(active&&e.pointerId===active.id){dlog(e,e.type);endActive();}};
+window.addEventListener("pointerup",safeEnd,true);
+window.addEventListener("pointercancel",safeEnd,true);
+sc.addEventListener("lostpointercapture",safeEnd);
 sc.addEventListener("pointerdown",onDown,{passive:false});
 sc.addEventListener("pointermove",onMove,{passive:false});
 sc.addEventListener("pointerup",onUp);
@@ -543,7 +612,7 @@ function finishStroke(){
   if(n>1){const ctx=rec.ctx;ctx.strokeStyle=st.c;ctx.lineCap="round";ctx.lineWidth=widthAt(st.w,d[3*n-1]);segPath(ctx,d,n-1,n);}
   const sh=cur,key=rec.key;
   cellOf(sh,key,true).s.push(st);
-  pushOp({sh,
+  pushOp({sh,keys:[key],
     undo(){const c=sh.cells[key]; if(c){const i=c.s.indexOf(st); if(i>=0)c.s.splice(i,1); pruneCell(sh,key);} redrawKeys([key]);},
     redo(){const c=cellOf(sh,key,true); if(!c.s.includes(st)){c.s.push(st);sortCell(c);} redrawKeys([key]);}});
   maybeGrow(rec,d[0],d[1],d[3*n-3],d[3*n-2]);
@@ -591,7 +660,7 @@ function finishErase(){
   const rem=active.removed; if(!rem.length) return;
   const sh=cur,keys=[...new Set(rem.map(x=>x.key))];
   keys.forEach(k=>pruneCell(sh,k));
-  pushOp({sh,
+  pushOp({sh,keys,
     undo(){rem.forEach(({key,st})=>cellOf(sh,key,true).s.push(st)); keys.forEach(k=>{const c=sh.cells[k]; if(c)sortCell(c);}); redrawKeys(keys);},
     redo(){rem.forEach(({key,st})=>{const c=sh.cells[key]; if(c){const i=c.s.indexOf(st); if(i>=0)c.s.splice(i,1); pruneCell(sh,key);}}); redrawKeys(keys);}});
 }
@@ -648,7 +717,7 @@ function switchSheet(id){
   const sh=sheets.find(s=>s.id===id); if(!sh||sh===cur) return;
   flush(); cur=sh; S.sheet=id; undoStack=[]; redoStack=[]; revealed.clear(); saveMeta(); rebuild(false); fillSheetSelect();
 }
-function addRows(k){cur.nRows=Math.min(60,cur.nRows+k); markDirty(cur); rebuild(false);}
+function addRows(k){cur.nRows=Math.min(60,cur.nRows+k); markDirty(cur,[]); rebuild(false);}
 function removeLastRow(){
   if(cur.nRows<=1) return;
   const r=cur.nRows-1; let used=!!(cur.rows[r]&&(cur.rows[r].ref||cur.rows[r].st));
@@ -709,7 +778,7 @@ function openRowModal(r){
   const ta=document.createElement("textarea"); ta.rows=3; ta.lang="th";
   ta.value=(cur.rows[r]||{}).ref||""; ta.placeholder="Texte thaï de référence (facultatif) — sert au bouton 🔊";
   body.append(el("p",null,"Tape ici le texte thaï correspondant à cette ligne pour pouvoir l'écouter avec la voix de l'iPad."),ta);
-  const save=()=>{const v=ta.value.trim(),ri=rowInfo(r); if(v!==(ri.ref||"")){ri.ref=v;markDirty(cur);refreshGut(r);}};
+  const save=()=>{const v=ta.value.trim(),ri=rowInfo(r); if(v!==(ri.ref||"")){ri.ref=v;markDirty(cur,[]);refreshGut(r);}};
   openModal("Ligne "+(r+1),body,[
     {t:"🔊 Écouter",keep:true,f:()=>{save();const v=ta.value.trim(); if(v)speak(v);}},
     {t:"Vider la ligne",cls:"bad",f:()=>{save();clearRow(r);}},
@@ -724,14 +793,14 @@ function openSheets(){
     const row=el("div","srow"); const nm=el("button","nm",sh.name+(sh===cur?"  ✓":"")); if(sh===cur)nm.classList.add("on");
     nm.onclick=()=>{closeModal();switchSheet(sh.id);};
     const rn=el("button",null,"✎"); rn.title="Renommer";
-    rn.onclick=()=>{const n=prompt("Nom de la feuille :",sh.name); if(n&&n.trim()){sh.name=n.trim();markDirty(sh);fillSheetSelect();openSheets();}};
+    rn.onclick=()=>{const n=prompt("Nom de la feuille :",sh.name); if(n&&n.trim()){sh.name=n.trim();markDirty(sh,[]);fillSheetSelect();openSheets();}};
     const dp=el("button",null,"⧉"); dp.title="Dupliquer";
     dp.onclick=()=>{const c=JSON.parse(JSON.stringify(sh)); c.id=uid(); c.name=sh.name+" (copie)"; sheets.push(c); markDirty(c); saveMeta(); fillSheetSelect(); openSheets();};
     const dl=el("button",null,"🗑"); dl.title="Supprimer";
     dl.onclick=()=>{
       if(sheets.length<2){toast("Il faut garder au moins une feuille");return;}
       if(!confirm("Supprimer « "+sh.name+" » définitivement ?")) return;
-      store.del("sheet:"+sh.id).catch(()=>{}); dirty.delete(sh.id);
+      dropSheetData(sh.id); dirty.delete(sh.id);
       sheets=sheets.filter(s=>s!==sh);
       if(cur===sh){cur=sheets[0];S.sheet=cur.id;undoStack=[];redoStack=[];rebuild(false);}
       saveMeta(); fillSheetSelect(); refreshBar(); openSheets();
@@ -766,6 +835,9 @@ function openMenu(){
     btn("− Dernière ligne",()=>{closeModal();removeLastRow();}),
     btn("Vider la feuille",()=>{closeModal(); if(confirm("Vider toute la feuille ? (annulable avec ↶)"))clearSheet();},false,"bad")
   ]);
+  sec("Diagnostic",[
+    btn("Diagnostic du stylet : "+(diag?"oui":"non"),()=>{diag=!diag;dlines.length=0;$("dbg").textContent="";$("dbg").style.display=diag?"block":"none";reopen();},diag)
+  ]);
   sec("Données",[
     btn("📤 Exporter (JSON)",()=>{closeModal();exportJSON();}),
     btn("🖼 Exporter en image",()=>{closeModal();exportPNG();}),
@@ -773,7 +845,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent=last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 5.2 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
@@ -881,7 +953,7 @@ function openImport(){
 function confirmImport(r){
   const body=el("div"); body.append(el("p",null,r.sheets.length+" feuille(s) à importer"+(r.legacy?" (ancien format)":"")+". Les ajouter à tes feuilles actuelles, ou tout remplacer ?"));
   const apply=replace=>{
-    if(replace){sheets.forEach(s=>store.del("sheet:"+s.id).catch(()=>{}));dirty.clear();sheets=[];}
+    if(replace){sheets.forEach(s=>dropSheetData(s.id));dirty.clear();sheets=[];}
     r.sheets.forEach(s=>{sheets.push(s);markDirty(s);});
     if(r.settings&&replace){if(r.settings.colW)Object.assign(S.colW,r.settings.colW); if(r.settings.rowH)S.rowH=r.settings.rowH;}
     cur=replace?sheets[0]:r.sheets[0]; S.sheet=cur.id; undoStack=[];redoStack=[];revealed.clear();
@@ -896,12 +968,18 @@ function confirmImport(r){
 
 /* ═══════════════ démarrage ═══════════════ */
 async function boot(){
+  const legacyFmt=[];
   await store.open();
   try{
     const meta=await store.get("meta");
     if(meta&&Array.isArray(meta.ids)){
       Object.assign(S,meta.S||{});
-      for(const id of meta.ids){const sh=await store.get("sheet:"+id); if(sh) sheets.push(sh);}
+      for(const id of meta.ids){
+        const sh=await store.get("sheet:"+id); if(!sh) continue;
+        if(sh.fmt===2) sh.cells=await store.rangeAll(cellKey(id,""));
+        else{sh.cells=sh.cells||{}; legacyFmt.push(sh);}
+        sheets.push(sh);
+      }
     }
   }catch(e){console.error("lecture",e);}
   S.colW={...DEF_COLW,...(S.colW||{})};
@@ -920,7 +998,7 @@ async function boot(){
   cur=sheets.find(s=>s.id===S.sheet)||sheets[0]; S.sheet=cur.id;
   if(!(S.view>=0&&S.view<VIEWS.length)) S.view=0;
   fillSelects();
-  sheets.forEach(s=>{if(migrated)markDirty(s);});
+  sheets.forEach(s=>{if(migrated)markDirty(s);}); legacyFmt.forEach(s=>markDirty(s));
   buildStage(); fit(); refreshBar(); setSave(store.mode==="mem"?"err":"ok");
   saveMeta();
   if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
