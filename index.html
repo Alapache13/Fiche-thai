@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Fiche thaï">
-<title>Fiche de vocabulaire thaï · v5</title>
+<title>Fiche de vocabulaire thaï · v6</title>
 <style>
   :root{
     --bg:#f2f2f7; --panel:#fff; --ink:#1c1c1e; --mut:#6e6e73; --line:#d8d8de;
@@ -83,6 +83,10 @@
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:rgba(28,28,30,.92);color:#fff;
     padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%)}
+  body.hasSel #toast{bottom:84px}
+  #selbar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:none;align-items:center;gap:8px;
+    background:rgba(28,28,30,.94);color:#fff;padding:8px 10px 8px 14px;border-radius:14px;font-size:14px;z-index:40;white-space:nowrap}
+  #selbar.on{display:flex}
   #dbg{display:none;position:fixed;left:8px;bottom:8px;margin:0;padding:6px 8px;background:rgba(0,0,0,.78);color:#9ef59e;
     font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;z-index:70;pointer-events:none;max-width:90vw}
 </style>
@@ -95,7 +99,7 @@
     <div class="grp"><button id="bPrev">◀</button><select id="selView" title="Vue"></select><button id="bNext">▶</button><button id="bReveal"></button></div>
     <span class="sep"></span>
     <div class="grp" id="tools">
-      <button data-tool="pen">✏️ Stylo</button><button data-tool="erase">🧽 Gomme</button><button data-tool="cell" title="Toucher une cellule pour la vider">🗑 Cellule</button>
+      <button data-tool="pen">✏️ Stylo</button><button data-tool="erase">🧽 Gomme</button><button data-tool="lasso" title="Entourer à main levée puis déplacer">〰️ Lasso</button><button data-tool="rect" title="Cadre rectangulaire puis déplacer">⬚ Cadre</button><button data-tool="cell" title="Toucher une cellule pour la vider">🗑 Cellule</button>
     </div>
     <div class="grp" id="colors">
       <button class="sw" data-c="#1c1c1e" style="--c:#1c1c1e"><i></i></button>
@@ -108,7 +112,7 @@
     <span class="sep"></span>
     <div class="grp"><button id="bUndo" title="Annuler">↶</button><button id="bRedo" title="Rétablir">↷</button></div>
     <span class="sep"></span>
-    <div class="grp"><button id="bZm">−</button><button id="bFit" title="Ajuster à la largeur de l'écran">Ajuster <span id="zoomLbl">100%</span></button><button id="bZp">＋</button></div>
+    <div class="grp"><button id="bZm">−</button><button id="bFit" title="Ajuster à la largeur de l'écran">Ajuster <span id="zoomLbl">100%</span></button><button id="bZp">＋</button><button id="bLock" title="Verrouiller le zoom">🔓</button></div>
     <button id="bFinger"></button>
     <button id="bFilter"></button>
     <span id="stats"></span><span id="saveInd" title="État de la sauvegarde">✓</span>
@@ -117,6 +121,7 @@
   <div id="sheet"><div id="stage"></div></div>
 </div>
 <div id="modal"><div class="mbox"></div></div>
+<div id="selbar"><span>↔ Glisse dans le cadre pour déplacer</span><button id="sbDel" class="bad">🗑 Supprimer</button><button id="sbOk" class="on">✓ OK</button></div>
 <div id="toast"></div>
 <pre id="dbg"></pre>
 
@@ -154,6 +159,7 @@ let Z=1, zoomMode="fit";
 let answerHidden=false; const revealed=new Set();
 let recs=[], hdrs=[], guts=[]; const recMap=new WeakMap();
 let undoStack=[], redoStack=[];
+let sel=null;   // sélection du lasso
 let seq=0; const nextId=()=>Date.now()*100+((seq++)%100);
 
 const $=id=>document.getElementById(id);
@@ -314,7 +320,11 @@ function paintCell(ctx,cell,w,h,o){
     const im=getImg(cell);
     if(im.complete&&im.naturalWidth){ctx.save(); if(o.color) ctx.globalAlpha=.55; ctx.drawImage(im,0,0,cell.bgw||w,cell.bgh||h); ctx.restore();}
   }
-  for(const st of cell.s) drawStroke(ctx,st,o.color||st.c);
+  const ss=o.sel;
+  for(const st of cell.s){
+    if(ss&&ss.set.has(st)){ctx.save();ctx.translate(ss.dx,ss.dy);drawStroke(ctx,st,o.color||st.c);ctx.restore();}
+    else drawStroke(ctx,st,o.color||st.c);
+  }
 }
 const colLW=rec=>rec.cmp?Math.max(S.colW[rec.col],S.colW[rec.cmp]):S.colW[rec.col];
 
@@ -326,7 +336,12 @@ function redrawCell(rec){
   if(rec.cmp){
     paintCell(ctx,cur.cells[rec.key],lw,S.rowH,{guides:S.guides,px,color:COL_A});
     paintCell(ctx,cur.cells[ck(rec.cmp,rec.row)],lw,S.rowH,{guides:false,px,color:COL_B});
-  }else paintCell(ctx,cur.cells[rec.key],lw,S.rowH,{guides:S.guides,px});
+  }else{
+    const sl=(sel&&sel.key===rec.key&&sel.sh===cur)?sel:null;
+    paintCell(ctx,cur.cells[rec.key],lw,S.rowH,{guides:S.guides,px,sel:sl});
+    if(sl) drawSelBox(ctx,sl);
+    if(active&&active.kind==="lasso"&&active.rec===rec) drawLassoPath(ctx,active);
+  }
   if(active&&active.kind==="stroke"&&active.rec===rec){
     const c=cur.cells[rec.key]; if(!c||!c.s.includes(active.st)) drawStroke(ctx,active.st,active.st.c);
   }
@@ -362,19 +377,73 @@ function viewBands(v){
   if(v.pair) return [v.pair.map(c=>S.colW[c])];
   return [[Math.max(S.colW[v.cmp[0]],S.colW[v.cmp[1]])]];
 }
+const getLock=()=>(cur&&cur.zlock)||S.zlockAll||0;
 function fit(){
+  const L=getLock();
+  if(L){Z=clamp(L,.35,2.6); zoomMode="locked"; lastFitW=sc.clientWidth; applySizes(); return;}
   const avail=sc.clientWidth-2*PAD-GUT; let z=Infinity;
   for(const ws of viewBands(VIEWS[S.view])){
     const sum=ws.reduce((a,b)=>a+b,0); z=Math.min(z,(avail-ws.length*4)/sum);
   }
   Z=clamp(Math.floor(z*100)/100,.35,2.2); zoomMode="fit"; lastFitW=sc.clientWidth; applySizes();
 }
-function setZoom(z,ax,ay){
+function setZoom(z,ax,ay,force){
+  if(!force&&getLock()){toast("🔒 Zoom verrouillé : touche 🔒 pour le changer");return;}
   const zo=Z; Z=clamp(Math.round(z*100)/100,.35,2.6); zoomMode="manual"; applySizes();
   if(ax==null){ax=sc.clientWidth/2;ay=sc.clientHeight/2;}
   const kx=PAD+GUT+4,ky=PAD+34;
   sc.scrollLeft=(sc.scrollLeft+ax-kx)*Z/zo+kx-ax;
   sc.scrollTop=(sc.scrollTop+ay-ky)*Z/zo+ky-ay;
+}
+
+
+/* ═══════════════ verrou de zoom ═══════════════ */
+function setLockValue(z){
+  z=Math.round(clamp(z,.35,2.6)*100)/100;
+  if(cur.zlock){cur.zlock=z;markDirty(cur,[]);}
+  else if(S.zlockAll){S.zlockAll=z;saveMeta();}
+}
+function openZoomLock(){
+  const body=el("div"); body.style.display="contents";
+  const L=getLock(),pct=Math.round(Z*100);
+  const scope=cur.zlock?"cette feuille":"toutes les feuilles";
+  body.append(el("p",null,L
+    ?"🔒 Zoom verrouillé à "+Math.round(L*100)+" % pour "+scope+". Il ne bouge plus : pincement, − ＋ et ajustement automatique sont désactivés, même en changeant de vue ou de feuille."
+    :"Zoom actuel : "+pct+" %. Une fois verrouillé, il ne bouge plus (pincement, − ＋ et ajustement automatique désactivés), même en changeant de vue ou de feuille."));
+  const apply=p=>{
+    p=+p; if(!(p>=35&&p<=260)){toast("Choisis entre 35 et 260 %");return;}
+    const z=Math.round(p)/100;
+    if(getLock()) setLockValue(z);
+    setZoom(z,undefined,undefined,true);
+    if(getLock()){zoomMode="locked";}
+    refreshBar(); openZoomLock();
+  };
+  body.append(el("div","sec","Régler le pourcentage"));
+  const g=el("div","btns");
+  [80,90,100,110,117,130].forEach(p=>{const b=el("button",pct===p?"on":"",p+" %"); b.onclick=()=>apply(p); g.appendChild(b);});
+  const inp=document.createElement("input"); inp.type="number"; inp.inputMode="numeric"; inp.min=35; inp.max=260; inp.value=pct;
+  inp.style.cssText="width:90px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:10px";
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();apply(inp.value);}});
+  const ok=el("button",null,"Appliquer"); ok.onclick=()=>apply(inp.value);
+  g.append(inp,ok); body.appendChild(g);
+  body.append(el("div","sec","Verrouillage"));
+  const g2=el("div","btns");
+  const lk=(t,f,cls)=>{const b=el("button",cls||"",t); b.onclick=f; g2.appendChild(b);};
+  const lockHere=all=>{
+    const z=Math.round(Z*100)/100;
+    if(all){S.zlockAll=z;delete cur.zlock;} else {cur.zlock=z;}
+    markDirty(cur,[]); saveMeta(); zoomMode="locked"; closeModal(); refreshBar();
+    toast("🔒 Zoom verrouillé à "+Math.round(z*100)+" % pour "+(all?"toutes les feuilles":"cette feuille"));
+  };
+  lk("🔒 Cette feuille",()=>lockHere(false),cur.zlock?"on":"");
+  lk("🔒 Toutes les feuilles",()=>lockHere(true),(!cur.zlock&&S.zlockAll)?"on":"");
+  if(L) lk("🔓 Déverrouiller",()=>{
+    if(cur.zlock){delete cur.zlock;markDirty(cur,[]);} else {S.zlockAll=0;saveMeta();}
+    closeModal(); if(getLock()){fit();} else zoomMode="manual";
+    refreshBar(); toast("🔓 Zoom déverrouillé");
+  },"bad");
+  body.appendChild(g2);
+  openModal("Zoom",body,[{t:"Fermer",cls:"on"}]);
 }
 
 /* ═══════════════ construction de la feuille ═══════════════ */
@@ -412,6 +481,7 @@ function attachResize(hd,col){
 }
 
 function buildStage(){
+  clearSel(false);
   stage.innerHTML=""; recs=[]; hdrs=[]; guts=[];
   const v=VIEWS[S.view];
   const bands=v.bands||[v.pair||[v.cmp[0]]];
@@ -465,17 +535,18 @@ function pushOp(op){
   undoStack.push(op); if(undoStack.length>300) undoStack.shift(); redoStack=[];
   markDirty(op.sh,op.keys); refreshBar();
 }
-function undo(){const op=undoStack.pop(); if(!op)return; op.undo(); redoStack.push(op); markDirty(op.sh,op.keys); refreshBar();}
-function redo(){const op=redoStack.pop(); if(!op)return; op.redo(); undoStack.push(op); markDirty(op.sh,op.keys); refreshBar();}
+function undo(){const op=undoStack.pop(); if(!op)return; clearSel(false); op.undo(); redoStack.push(op); markDirty(op.sh,op.keys); refreshBar();}
+function redo(){const op=redoStack.pop(); if(!op)return; clearSel(false); op.redo(); undoStack.push(op); markDirty(op.sh,op.keys); refreshBar();}
 function sortCell(c){c.s.sort((a,b)=>(a.i||0)-(b.i||0));}
 
 function clearCellOp(key){
   const sh=cur,c=sh.cells[key]; if(!c){return;}
+  clearSel(false);
   delete sh.cells[key]; redrawKeys([key]);
   pushOp({sh,keys:[key],undo(){sh.cells[key]=c;redrawKeys([key]);},redo(){delete sh.cells[key];redrawKeys([key]);}});
 }
 function clearRow(r){
-  const sh=cur,snap={};
+  const sh=cur,snap={}; clearSel(false);
   for(let col=1;col<=8;col++){const k=ck(col,r); if(sh.cells[k]){snap[k]=sh.cells[k];delete sh.cells[k];}}
   const keys=Object.keys(snap); if(!keys.length){toast("Ligne déjà vide");return;}
   redrawKeys(keys);
@@ -483,6 +554,7 @@ function clearRow(r){
 }
 function clearSheet(){
   const sh=cur,snap=sh.cells; if(!Object.keys(snap).length){toast("Feuille déjà vide");return;}
+  clearSel(false);
   sh.cells={}; redrawAll();
   pushOp({sh,undo(){sh.cells=snap;redrawAll();},redo(){sh.cells={};redrawAll();}});
 }
@@ -510,6 +582,7 @@ function startTouch(e){
   touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(touches.size===1){pan={lx:e.clientX,ly:e.clientY,vx:0,vy:0,lt:e.timeStamp};}
   else if(touches.size===2){
+    if(getLock()){touches.delete(e.pointerId);return;}   // zoom verrouillé : le 2e doigt est ignoré
     pan=null; const [a,b]=[...touches.values()]; const r=stage.getBoundingClientRect();
     const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
     pinch={d0:dist(a,b)||1,z0:Z,cx,cy,scale:1};
@@ -560,6 +633,7 @@ function onDown(e){
   try{cv.setPointerCapture(e.pointerId);}catch(_){}
   if(S.tool==="cell"){clearCellOp(rec.key);return;}
   if(S.tool==="erase"){active={kind:"erase",id:e.pointerId,removed:[],touched:new Set()};eraseAt(e);return;}
+  if(S.tool==="lasso"||S.tool==="rect"){startSel(e,cv,rec);return;}
   beginStroke(e,cv,rec);
 }
 function onMove(e){
@@ -567,13 +641,13 @@ function onMove(e){
   if(active&&e.pointerId===active.id){
     if(e.pointerType!=="touch"&&e.buttons===0&&e.pressure===0){dlog(e,"fin(survol)");endActive();return;}
     e.preventDefault();
-    if(active.kind==="stroke") strokeMove(e); else eraseAt(e);
+    if(active.kind==="stroke") strokeMove(e); else if(active.kind==="erase") eraseAt(e); else if(active.kind==="lasso") lassoMove(e); else moveSel(e);
   }
 }
 function endActive(){
   if(!active) return;
   const a=active, t0=performance.now();
-  try{ if(a.kind==="stroke") finishStroke(); else finishErase(); }
+  try{ if(a.kind==="stroke") finishStroke(); else if(a.kind==="erase") finishErase(); else finishSel(a); }
   catch(err){console.error("fin de trait",err);}
   finally{active=null; const dt=performance.now()-t0; if(dt>30) dlogRaw("fin de trait "+Math.round(dt)+" ms");}
 }
@@ -655,6 +729,132 @@ function maybeGrow(rec,sx,sy,ex,ey){
   if(oldRight>sr.left+sr.width*.7) sc.scrollTo({left:sc.scrollLeft+(oldRight-(sr.left+sr.width*.55)),behavior:"smooth"});
 }
 
+
+/* ---- lasso (forme libre) et cadre (rectangle) : sélectionner des traits dans une case puis les déplacer ---- */
+function ptInPoly(x,y,P){
+  let inside=false; const n=P.length/2;
+  for(let i=0,j=n-1;i<n;j=i++){
+    const xi=P[2*i],yi=P[2*i+1],xj=P[2*j],yj=P[2*j+1];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function strokesBox(list){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const st of list){const d=st.d,h=st.w/2+1;
+    for(let i=0;i<d.length;i+=3){x0=Math.min(x0,d[i]-h);x1=Math.max(x1,d[i]+h);y0=Math.min(y0,d[i+1]-h);y1=Math.max(y1,d[i+1]+h);}}
+  return {x0,y0,x1,y1};
+}
+function clearSel(redraw){
+  if(!sel) return;
+  const key=sel.key; sel=null;
+  $("selbar").classList.remove("on"); document.body.classList.remove("hasSel");
+  if(redraw!==false) redrawKeys([key]);
+}
+function drawSelBox(ctx,s){
+  const b=s.box,P=6,u=1/Z;
+  ctx.save(); ctx.fillStyle="rgba(10,99,255,.08)";
+  ctx.fillRect(b.x0+s.dx-P,b.y0+s.dy-P,b.x1-b.x0+2*P,b.y1-b.y0+2*P);
+  ctx.lineWidth=2*u; ctx.strokeStyle="#0a63ff"; ctx.setLineDash([6*u,4*u]);
+  ctx.strokeRect(b.x0+s.dx-P,b.y0+s.dy-P,b.x1-b.x0+2*P,b.y1-b.y0+2*P);
+  ctx.restore();
+}
+function drawLassoPath(ctx,a){
+  const u=1/Z,p=a.pts; ctx.save();
+  ctx.lineWidth=2*u; ctx.strokeStyle="#0a63ff"; ctx.setLineDash([6*u,4*u]); ctx.lineJoin="round"; ctx.lineCap="round";
+  ctx.beginPath();
+  if(a.rect){ if(p.length>=4) ctx.rect(Math.min(p[0],p[2]),Math.min(p[1],p[3]),Math.abs(p[2]-p[0]),Math.abs(p[3]-p[1])); }
+  else{ ctx.moveTo(p[0],p[1]); for(let i=2;i<p.length;i+=2) ctx.lineTo(p[i],p[i+1]); }
+  ctx.stroke();
+  if(!a.rect&&p.length>=6){ctx.globalAlpha=.35;ctx.beginPath();ctx.moveTo(p[p.length-2],p[p.length-1]);ctx.lineTo(p[0],p[1]);ctx.stroke();}
+  ctx.restore();
+}
+function schedRedraw(a){
+  if(a.raf) return;
+  a.raf=requestAnimationFrame(()=>{a.raf=0; redrawCell(a.rec);});
+}
+function startSel(e,cv,rec){
+  const lw=colLW(rec),r=cv.getBoundingClientRect();
+  const x=(e.clientX-r.left)*lw/r.width, y=(e.clientY-r.top)*S.rowH/r.height;
+  if(sel&&sel.key===rec.key&&sel.sh===cur){
+    const b=sel.box,P=12;
+    if(x>=b.x0-P&&x<=b.x1+P&&y>=b.y0-P&&y<=b.y1+P){
+      active={kind:"move",id:e.pointerId,rec,sx:e.clientX,sy:e.clientY,raf:0};
+      return;
+    }
+  }
+  clearSel();
+  active={kind:"lasso",id:e.pointerId,rec,lw,r,rect:S.tool==="rect",pts:[x,y],raf:0};
+}
+function lassoMove(e){
+  const a=active,evs=(e.getCoalescedEvents&&e.getCoalescedEvents())||[];
+  for(const ev of (evs.length?evs:[e])){
+    const x=clamp((ev.clientX-a.r.left)*a.lw/a.r.width,0,a.lw), y=clamp((ev.clientY-a.r.top)*S.rowH/a.r.height,0,S.rowH);
+    if(a.rect){a.pts[2]=x;a.pts[3]=y;}
+    else{const n=a.pts.length; if(Math.hypot(x-a.pts[n-2],y-a.pts[n-1])>=2) a.pts.push(x,y);}
+  }
+  schedRedraw(a);
+}
+function moveSel(e){
+  const a=active; if(!sel) return;
+  const b=sel.box,col=a.rec.col;
+  let dx=(e.clientX-a.sx)/Z, dy=(e.clientY-a.sy)/Z;
+  const lo=1-b.y0,hi=S.rowH-1-b.y1; dy=lo>hi?0:clamp(dy,lo,hi);
+  const need=b.x1+dx+6;                       // la colonne s'élargit si on pousse la sélection vers la droite
+  if(need>S.colW[col]&&S.autoGrow&&S.colW[col]<MAXGROW){
+    sel.dx=dx; sel.dy=dy;
+    S.colW[col]=Math.min(MAXGROW,Math.ceil((need+40)/10)*10); sizeColumn(col); a.grew=true;
+  }
+  dx=Math.min(dx,S.colW[col]-6-b.x1); dx=Math.max(dx,2-b.x0);
+  sel.dx=dx; sel.dy=dy; schedRedraw(a);
+}
+function shiftStrokes(list,dx,dy){
+  for(const st of list){const d=st.d; for(let i=0;i<d.length;i+=3){d[i]=r1(d[i]+dx);d[i+1]=r1(d[i+1]+dy);}}
+}
+function finishSel(a){
+  active=null;
+  if(a.raf){cancelAnimationFrame(a.raf);a.raf=0;}
+  if(a.kind==="move"){
+    if(!sel){return;}
+    const dx=r1(sel.dx),dy=r1(sel.dy),key=sel.key,list=sel.list,sh=cur;
+    if(a.grew) saveMeta();
+    if(Math.abs(dx)<.5&&Math.abs(dy)<.5){sel.dx=sel.dy=0; redrawKeys([key]); return;}
+    shiftStrokes(list,dx,dy);
+    sel.box={x0:sel.box.x0+dx,y0:sel.box.y0+dy,x1:sel.box.x1+dx,y1:sel.box.y1+dy}; sel.dx=sel.dy=0;
+    redrawKeys([key]);
+    pushOp({sh,keys:[key],
+      undo(){shiftStrokes(list,-dx,-dy);redrawKeys([key]);},
+      redo(){shiftStrokes(list,dx,dy);redrawKeys([key]);}});
+    return;
+  }
+  // fin du tracé du lasso : quels traits sont dedans ?
+  const rec=a.rec,p=a.pts; let poly=null;
+  if(a.rect){ if(p.length>=4&&Math.abs(p[2]-p[0])>=4&&Math.abs(p[3]-p[1])>=4) poly=[p[0],p[1],p[2],p[1],p[2],p[3],p[0],p[3]]; }
+  else if(p.length>=8) poly=p;
+  if(!poly){redrawCell(rec);return;}                       // simple toucher : rien à sélectionner
+  const cell=cur.cells[rec.key],list=[];
+  if(cell) for(const st of cell.s){
+    const d=st.d,n=d.length/3; let inn=0;
+    for(let i=0;i<n;i++) if(ptInPoly(d[3*i],d[3*i+1],poly)) inn++;
+    if(n&&inn/n>=.5) list.push(st);
+  }
+  if(!list.length){redrawCell(rec);toast("Rien dans la sélection : entoure les traits");return;}
+  sel={sh:cur,key:rec.key,col:rec.col,row:rec.row,list,set:new Set(list),box:strokesBox(list),dx:0,dy:0};
+  $("selbar").classList.add("on"); document.body.classList.add("hasSel");
+  redrawCell(rec);
+}
+function delSel(){
+  if(!sel) return;
+  const sh=cur,key=sel.key,list=sel.list.slice(),c=sh.cells[key]; if(!c){clearSel();return;}
+  clearSel(false);
+  list.forEach(st=>{const i=c.s.indexOf(st); if(i>=0)c.s.splice(i,1);}); pruneCell(sh,key); redrawKeys([key]);
+  pushOp({sh,keys:[key],
+    undo(){const cc=cellOf(sh,key,true); list.forEach(st=>{if(!cc.s.includes(st))cc.s.push(st);}); sortCell(cc); redrawKeys([key]);},
+    redo(){const cc=sh.cells[key]; if(cc){list.forEach(st=>{const i=cc.s.indexOf(st); if(i>=0)cc.s.splice(i,1);}); pruneCell(sh,key);} redrawKeys([key]);}});
+}
+$("sbDel").onclick=delSel;
+$("sbOk").onclick=()=>clearSel();
+
 /* ---- gomme (au trait entier) ---- */
 function distSeg(px,py,ax,ay,bx,by){
   const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy;
@@ -716,6 +916,9 @@ function refreshBar(){
   document.querySelectorAll("#tools button").forEach(b=>b.classList.toggle("on",b.dataset.tool===S.tool));
   document.querySelectorAll("#colors button").forEach(b=>b.classList.toggle("on",b.dataset.c===S.color));
   document.querySelectorAll("#widths button").forEach(b=>b.classList.toggle("on",+b.dataset.w===S.width));
+  const L=getLock(),lk=$("bLock");
+  lk.textContent=L?"🔒 "+Math.round(L*100)+" %":"🔓"; lk.classList.toggle("on",!!L);
+  $("bZm").disabled=$("bZp").disabled=$("bFit").disabled=!!L;
   $("bUndo").disabled=!undoStack.length; $("bRedo").disabled=!redoStack.length;
   $("bUndo").textContent=undoStack.length?"↶ "+undoStack.length:"↶";
   const f=$("bFinger"); f.textContent=S.fingerMode==="scroll"?"✋ Doigt : défiler":"☝️ Doigt : écrire"; f.classList.toggle("on",S.fingerMode==="draw");
@@ -743,7 +946,10 @@ function setView(i){
 }
 function switchSheet(id){
   const sh=sheets.find(s=>s.id===id); if(!sh||sh===cur) return;
-  flush(true); cur=sh; S.sheet=id; undoStack=[]; redoStack=[]; revealed.clear(); saveMeta(); rebuild(false); fillSheetSelect();
+  flush(true); cur=sh; S.sheet=id; undoStack=[]; redoStack=[]; revealed.clear();
+  const L=getLock(); let refit=false;
+  if(L){Z=clamp(L,.35,2.6);zoomMode="locked";} else if(zoomMode==="locked"){zoomMode="fit";refit=true;}
+  saveMeta(); rebuild(refit); fillSheetSelect();
 }
 function addRows(k){cur.nRows=Math.min(60,cur.nRows+k); markDirty(cur,[]); rebuild(false);}
 function removeLastRow(){
@@ -760,13 +966,15 @@ $("bNext").onclick=()=>setView(S.view+1);
 $("selView").onchange=e=>setView(+e.target.value);
 $("selSheet").onchange=e=>switchSheet(e.target.value);
 $("bReveal").onclick=()=>{answerHidden=!answerHidden;revealed.clear();updateMasks();refreshBar();};
-document.querySelectorAll("#tools button").forEach(b=>b.onclick=()=>{S.tool=b.dataset.tool;saveMeta();refreshBar();});
-document.querySelectorAll("#colors button").forEach(b=>b.onclick=()=>{S.color=b.dataset.c;if(S.tool!=="pen")S.tool="pen";saveMeta();refreshBar();});
-document.querySelectorAll("#widths button").forEach(b=>b.onclick=()=>{S.width=+b.dataset.w;if(S.tool!=="pen")S.tool="pen";saveMeta();refreshBar();});
+const setTool=t=>{if(S.tool!==t){clearSel();S.tool=t;}};
+document.querySelectorAll("#tools button").forEach(b=>b.onclick=()=>{setTool(b.dataset.tool);clearSel();saveMeta();refreshBar();});
+document.querySelectorAll("#colors button").forEach(b=>b.onclick=()=>{S.color=b.dataset.c;setTool("pen");saveMeta();refreshBar();});
+document.querySelectorAll("#widths button").forEach(b=>b.onclick=()=>{S.width=+b.dataset.w;setTool("pen");saveMeta();refreshBar();});
 $("bUndo").onclick=undo; $("bRedo").onclick=redo;
 $("bZm").onclick=()=>{setZoom(Z/1.15);refreshBar();};
 $("bZp").onclick=()=>{setZoom(Z*1.15);refreshBar();};
 $("bFit").onclick=()=>{fit();sc.scrollLeft=0;};
+$("bLock").onclick=()=>openZoomLock();
 $("bFinger").onclick=()=>{S.fingerMode=S.fingerMode==="scroll"?"draw":"scroll";saveMeta();refreshBar();
   toast(S.fingerMode==="scroll"?"Les doigts font défiler et zoomer ; seul le stylet écrit":"Les doigts écrivent aussi (attention à la paume)");};
 $("bFilter").onclick=()=>{S.filter=(S.filter+1)%3;saveMeta();rebuild(false);};
@@ -849,7 +1057,7 @@ function openSheets(){
       if(!confirm("Supprimer « "+sh.name+" » définitivement ?")) return;
       dropSheetData(sh.id); dirty.delete(sh.id);
       sheets=sheets.filter(s=>s!==sh);
-      if(cur===sh){cur=sheets[0];S.sheet=cur.id;undoStack=[];redoStack=[];rebuild(false);}
+      if(cur===sh){cur=sheets[0];S.sheet=cur.id;undoStack=[];redoStack=[];const L=getLock();if(L){Z=clamp(L,.35,2.6);zoomMode="locked";}else if(zoomMode==="locked")zoomMode="fit";rebuild(zoomMode==="fit");}
       saveMeta(); fillSheetSelect(); refreshBar(); openSheets();
     };
     row.append(nm,rn,dp,dl); body.appendChild(row);
@@ -914,7 +1122,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 5.9 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 6.0 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
