@@ -28,6 +28,7 @@
   button,select{font:inherit;font-size:14px;min-height:40px;padding:0 11px;border:1px solid var(--line);
     border-radius:10px;background:#fff;color:var(--ink);touch-action:manipulation}
   select{max-width:210px}
+  #selTheme{max-width:170px}
   button.on{background:var(--acc);border-color:var(--acc);color:#fff}
   button.bad{background:var(--bad);border-color:var(--bad);color:#fff}
   button:disabled{opacity:.35}
@@ -80,6 +81,7 @@
   .btns{display:flex;flex-wrap:wrap;gap:6px}
   .srow{display:flex;gap:6px;align-items:center}
   .srow .nm{flex:1;text-align:left}
+  .tg{font-size:12px;font-weight:700;color:var(--acc);margin:8px 0 0}
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:rgba(28,28,30,.92);color:#fff;
     padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:90vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%)}
@@ -87,6 +89,8 @@
   #selbar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);display:none;align-items:center;gap:8px;
     background:rgba(28,28,30,.94);color:#fff;padding:8px 10px 8px 14px;border-radius:14px;font-size:14px;z-index:40;white-space:nowrap}
   #selbar.on{display:flex}
+  #selmenu{position:fixed;display:none;gap:6px;padding:8px;background:rgba(28,28,30,.96);border-radius:14px;z-index:45;box-shadow:0 6px 24px rgba(0,0,0,.3)}
+  #selmenu.on{display:flex}
   #dbg{display:none;position:fixed;left:8px;bottom:8px;margin:0;padding:6px 8px;background:rgba(0,0,0,.78);color:#9ef59e;
     font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;z-index:70;pointer-events:none;max-width:90vw}
 </style>
@@ -94,7 +98,7 @@
 <body>
 <div id="app">
   <header id="bar">
-    <div class="grp"><select id="selSheet" title="Feuille"></select><button id="bSheets" title="Gérer les feuilles">📚</button><button id="bFinish" title="Terminer la feuille / réviser"></button><button id="bRev" title="Tableau de bord des révisions"></button></div>
+    <div class="grp"><select id="selTheme" title="Thème : ranger et filtrer les feuilles"></select><select id="selSheet" title="Feuille"></select><button id="bSheets" title="Gérer les feuilles">📚</button><button id="bFinish" title="Terminer la feuille / réviser"></button><button id="bRev" title="Tableau de bord des révisions"></button></div>
     <span class="sep"></span>
     <div class="grp"><button id="bPrev">◀</button><select id="selView" title="Vue"></select><button id="bNext">▶</button><button id="bReveal"></button></div>
     <span class="sep"></span>
@@ -121,7 +125,8 @@
   <div id="sheet"><div id="stage"></div></div>
 </div>
 <div id="modal"><div class="mbox"></div></div>
-<div id="selbar"><span>↔ Glisse dans le cadre pour déplacer</span><button id="sbDel" class="bad">🗑 Supprimer</button><button id="sbOk" class="on">✓ OK</button></div>
+<div id="selbar"><span>↔ Glisse pour déplacer (même vers une autre case) · touche la sélection : copier, couper…</span><button id="sbDel" class="bad">🗑 Supprimer</button><button id="sbOk" class="on">✓ OK</button></div>
+<div id="selmenu"></div>
 <div id="toast"></div>
 <pre id="dbg"></pre>
 
@@ -153,7 +158,7 @@ const COL_A="#2f6fe4", COL_B="#d93025";
 
 /* ═══════════════ état ═══════════════ */
 const S={colW:{...DEF_COLW},rowH:72,guides:true,autoGrow:true,simple:false,fingerMode:"scroll",
-  tool:"pen",color:"#1c1c1e",width:2.4,view:0,sheet:null,filter:0,lastExport:0,log:{},goal:10};
+  tool:"pen",color:"#1c1c1e",width:2.4,view:0,sheet:null,filter:0,lastExport:0,log:{},goal:10,themes:[],theme:""};
 let sheets=[], cur=null;
 let Z=1, zoomMode="fit";
 let answerHidden=false; const revealed=new Set();
@@ -322,7 +327,7 @@ function paintCell(ctx,cell,w,h,o){
   }
   const ss=o.sel;
   for(const st of cell.s){
-    if(ss&&ss.set.has(st)){ctx.save();ctx.translate(ss.dx,ss.dy);drawStroke(ctx,st,o.color||st.c);ctx.restore();}
+    if(ss&&ss.set.has(st)){ctx.save();if(ss.tgt)ctx.globalAlpha=.25;else ctx.translate(ss.dx,ss.dy);drawStroke(ctx,st,o.color||st.c);ctx.restore();}
     else drawStroke(ctx,st,o.color||st.c);
   }
 }
@@ -340,6 +345,11 @@ function redrawCell(rec){
     const sl=(sel&&sel.key===rec.key&&sel.sh===cur)?sel:null;
     paintCell(ctx,cur.cells[rec.key],lw,S.rowH,{guides:S.guides,px,sel:sl});
     if(sl) drawSelBox(ctx,sl);
+    if(sel&&sel.tgt&&sel.tgt.key===rec.key&&sel.sh===cur){            // aperçu « fantôme » dans la case cible
+      ctx.save(); ctx.globalAlpha=.75; ctx.translate(sel.tgt.dx,sel.tgt.dy);
+      for(const st of sel.list) drawStroke(ctx,st,st.c);
+      ctx.restore(); drawSelBox(ctx,{box:sel.box,dx:sel.tgt.dx,dy:sel.tgt.dy});
+    }
     if(active&&active.kind==="lasso"&&active.rec===rec) drawLassoPath(ctx,active);
   }
   if(active&&active.kind==="stroke"&&active.rec===rec){
@@ -746,6 +756,7 @@ function strokesBox(list){
   return {x0,y0,x1,y1};
 }
 function clearSel(redraw){
+  hideMenu();
   if(!sel) return;
   const key=sel.key; sel=null;
   $("selbar").classList.remove("on"); document.body.classList.remove("hasSel");
@@ -769,9 +780,15 @@ function drawLassoPath(ctx,a){
   if(!a.rect&&p.length>=6){ctx.globalAlpha=.35;ctx.beginPath();ctx.moveTo(p[p.length-2],p[p.length-1]);ctx.lineTo(p[0],p[1]);ctx.stroke();}
   ctx.restore();
 }
-function schedRedraw(a){
+function schedRedraw(a,keys){
+  a.keys=a.keys||new Set(); (keys||[a.rec.key]).forEach(k=>a.keys.add(k));
   if(a.raf) return;
-  a.raf=requestAnimationFrame(()=>{a.raf=0; redrawCell(a.rec);});
+  a.raf=requestAnimationFrame(()=>{a.raf=0; const ks=a.keys; a.keys=new Set(); redrawKeys(ks);});
+}
+function toUnits(rec,cx,cy){const r=rec.el.getBoundingClientRect(); return [(cx-r.left)*colLW(rec)/r.width,(cy-r.top)*S.rowH/r.height];}
+function growCol(col,need){
+  if(need>S.colW[col]&&S.autoGrow&&S.colW[col]<MAXGROW){S.colW[col]=Math.min(MAXGROW,Math.ceil((need+40)/10)*10); sizeColumn(col); return true;}
+  return false;
 }
 function startSel(e,cv,rec){
   const lw=colLW(rec),r=cv.getBoundingClientRect();
@@ -779,8 +796,8 @@ function startSel(e,cv,rec){
   if(sel&&sel.key===rec.key&&sel.sh===cur){
     const b=sel.box,P=12;
     if(x>=b.x0-P&&x<=b.x1+P&&y>=b.y0-P&&y<=b.y1+P){
-      active={kind:"move",id:e.pointerId,rec,sx:e.clientX,sy:e.clientY,raf:0};
-      return;
+      active={kind:"move",id:e.pointerId,rec,sx:e.clientX,sy:e.clientY,ux:x,uy:y,gx:x-b.x0,gy:y-b.y0,raf:0,moved:false};
+      hideMenu(); return;
     }
   }
   clearSel();
@@ -797,27 +814,55 @@ function lassoMove(e){
 }
 function moveSel(e){
   const a=active; if(!sel) return;
-  const b=sel.box,col=a.rec.col;
-  let dx=(e.clientX-a.sx)/Z, dy=(e.clientY-a.sy)/Z;
-  const lo=1-b.y0,hi=S.rowH-1-b.y1; dy=lo>hi?0:clamp(dy,lo,hi);
-  const need=b.x1+dx+6;                       // la colonne s'élargit si on pousse la sélection vers la droite
-  if(need>S.colW[col]&&S.autoGrow&&S.colW[col]<MAXGROW){
-    sel.dx=dx; sel.dy=dy;
-    S.colW[col]=Math.min(MAXGROW,Math.ceil((need+40)/10)*10); sizeColumn(col); a.grew=true;
+  if(!a.moved){ if(Math.hypot(e.clientX-a.sx,e.clientY-a.sy)>6) a.moved=true; else return; }
+  const b=sel.box,bw=b.x1-b.x0,bh=b.y1-b.y0;
+  const t=document.elementFromPoint(e.clientX,e.clientY),cv=t&&t.closest?t.closest("canvas.cv"):null,r2=cv?recMap.get(cv):null;
+  if(!r2) return;                                   // entre deux cases : on garde la position précédente
+  const keys=[sel.key];
+  if(r2.key!==sel.key){                             // vers une autre case : aperçu fantôme, validé au relâchement
+    if(r2.cmp||isMasked(r2)) return;
+    const [tx,ty]=toUnits(r2,e.clientX,e.clientY);
+    let ox=tx-a.gx,oy=ty-a.gy;
+    if(growCol(r2.col,ox+bw+6)) a.grew=true;
+    const W=S.colW[r2.col];
+    ox=clamp(ox,2,Math.max(2,W-bw-6)); oy=bh>S.rowH-2?1:clamp(oy,1,S.rowH-1-bh);
+    if(sel.tgt) keys.push(sel.tgt.key);
+    sel.tgt={key:r2.key,col:r2.col,row:r2.row,dx:ox-b.x0,dy:oy-b.y0}; keys.push(r2.key); sel.dx=sel.dy=0;
+    schedRedraw(a,keys); return;
   }
+  let dx=(e.clientX-a.sx)/Z, dy=(e.clientY-a.sy)/Z;   // dans la même case : déplacement relatif
+  const lo=1-b.y0,hi=S.rowH-1-b.y1; dy=lo>hi?0:clamp(dy,lo,hi);
+  const col=a.rec.col;
+  sel.dx=dx; sel.dy=dy;
+  if(growCol(col,b.x1+dx+6)) a.grew=true;
   dx=Math.min(dx,S.colW[col]-6-b.x1); dx=Math.max(dx,2-b.x0);
-  sel.dx=dx; sel.dy=dy; schedRedraw(a);
+  if(sel.tgt){keys.push(sel.tgt.key); sel.tgt=null;}
+  sel.dx=dx; sel.dy=dy; schedRedraw(a,keys);
 }
 function shiftStrokes(list,dx,dy){
   for(const st of list){const d=st.d; for(let i=0;i<d.length;i+=3){d[i]=r1(d[i]+dx);d[i+1]=r1(d[i+1]+dy);}}
+}
+function takeOut(sh,key,list){const c=sh.cells[key]; if(!c)return; list.forEach(st=>{const i=c.s.indexOf(st); if(i>=0)c.s.splice(i,1);}); pruneCell(sh,key);}
+function putIn(sh,key,list){const c=cellOf(sh,key,true); list.forEach(st=>{if(!c.s.includes(st))c.s.push(st);}); sortCell(c);}
+function commitCross(){
+  const sh=cur,skey=sel.key,t=sel.tgt,list=sel.list,dx=r1(t.dx),dy=r1(t.dy),tkey=t.key;
+  takeOut(sh,skey,list); shiftStrokes(list,dx,dy); putIn(sh,tkey,list);
+  sel.box={x0:sel.box.x0+dx,y0:sel.box.y0+dy,x1:sel.box.x1+dx,y1:sel.box.y1+dy};
+  sel.key=tkey; sel.col=t.col; sel.row=t.row; sel.tgt=null; sel.dx=sel.dy=0;
+  redrawKeys([skey,tkey]);
+  pushOp({sh,keys:[skey,tkey],
+    undo(){takeOut(sh,tkey,list); shiftStrokes(list,-dx,-dy); putIn(sh,skey,list); redrawKeys([skey,tkey]);},
+    redo(){takeOut(sh,skey,list); shiftStrokes(list,dx,dy); putIn(sh,tkey,list); redrawKeys([skey,tkey]);}});
 }
 function finishSel(a){
   active=null;
   if(a.raf){cancelAnimationFrame(a.raf);a.raf=0;}
   if(a.kind==="move"){
     if(!sel){return;}
-    const dx=r1(sel.dx),dy=r1(sel.dy),key=sel.key,list=sel.list,sh=cur;
     if(a.grew) saveMeta();
+    if(!a.moved){ openSelMenu(a.sx,a.sy,sel.key,a.ux,a.uy); return; }   // simple toucher sur la sélection : menu
+    if(sel.tgt){commitCross();return;}
+    const dx=r1(sel.dx),dy=r1(sel.dy),key=sel.key,list=sel.list,sh=cur;
     if(Math.abs(dx)<.5&&Math.abs(dy)<.5){sel.dx=sel.dy=0; redrawKeys([key]); return;}
     shiftStrokes(list,dx,dy);
     sel.box={x0:sel.box.x0+dx,y0:sel.box.y0+dy,x1:sel.box.x1+dx,y1:sel.box.y1+dy}; sel.dx=sel.dy=0;
@@ -831,7 +876,14 @@ function finishSel(a){
   const rec=a.rec,p=a.pts; let poly=null;
   if(a.rect){ if(p.length>=4&&Math.abs(p[2]-p[0])>=4&&Math.abs(p[3]-p[1])>=4) poly=[p[0],p[1],p[2],p[1],p[2],p[3],p[0],p[3]]; }
   else if(p.length>=8) poly=p;
-  if(!poly){redrawCell(rec);return;}                       // simple toucher : rien à sélectionner
+  if(!poly){
+    redrawCell(rec);
+    const trav=a.rect?(p.length>=4?Math.hypot(p[2]-p[0],p[3]-p[1]):0):Math.max(0,...p.map((v,i)=>i%2?Math.abs(v-p[1]):Math.abs(v-p[0])));
+    if(trav<6&&clip){                                       // simple toucher dans une case vide : proposer de coller
+      const r=a.r; openSelMenu(r.left+p[0]*r.width/a.lw,r.top+p[1]*r.height/S.rowH,rec.key,p[0],p[1],true);
+    }
+    return;
+  }
   const cell=cur.cells[rec.key],list=[];
   if(cell) for(const st of cell.s){
     const d=st.d,n=d.length/3; let inn=0;
@@ -839,9 +891,53 @@ function finishSel(a){
     if(n&&inn/n>=.5) list.push(st);
   }
   if(!list.length){redrawCell(rec);toast("Rien dans la sélection : entoure les traits");return;}
+  setSel(rec,list);
+}
+function setSel(rec,list){
   sel={sh:cur,key:rec.key,col:rec.col,row:rec.row,list,set:new Set(list),box:strokesBox(list),dx:0,dy:0};
   $("selbar").classList.add("on"); document.body.classList.add("hasSel");
   redrawCell(rec);
+}
+
+/* ---- menu contextuel, copier / couper / coller ---- */
+let clip=null;
+const selmenu=$("selmenu");
+function hideMenu(){selmenu.classList.remove("on");}
+function showMenu(cx,cy,items){
+  selmenu.innerHTML="";
+  items.filter(Boolean).forEach(([t,f])=>{const b=el("button",null,t); b.onclick=()=>{hideMenu();f();}; selmenu.appendChild(b);});
+  selmenu.classList.add("on");
+  const w=selmenu.offsetWidth,h=selmenu.offsetHeight;
+  selmenu.style.left=clamp(cx-w/2,8,innerWidth-w-8)+"px";
+  let top=cy-h-26; if(top<8) top=cy+26; selmenu.style.top=top+"px";
+}
+document.addEventListener("pointerdown",e=>{if(selmenu.classList.contains("on")&&!(e.target.closest&&e.target.closest("#selmenu")))hideMenu();},true);
+function openSelMenu(cx,cy,key,ux,uy,pasteOnly){
+  const paste=clip?["📋 Coller",()=>pasteAt(key,ux,uy)]:null;
+  if(pasteOnly) showMenu(cx,cy,[["📋 Coller ici",()=>pasteAt(key,ux,uy)]]);
+  else showMenu(cx,cy,[["⧉ Copier",copySel],["✂️ Couper",()=>{copySel();delSel();}],paste,["🗑 Effacer",delSel],["✓ OK",()=>clearSel()]]);
+}
+function copySel(){
+  if(!sel) return;
+  const b=sel.box;
+  clip={w:b.x1-b.x0,h:b.y1-b.y0,strokes:sel.list.map(st=>({c:st.c,w:st.w,d:st.d.map((v,i)=>i%3===0?r1(v-b.x0):i%3===1?r1(v-b.y0):v)}))};
+  toast("Copié ("+sel.list.length+" trait"+(sel.list.length>1?"s":"")+") · touche une case vide pour coller",3600);
+}
+function pasteAt(key,ux,uy){
+  if(!clip) return;
+  const rec=recs.find(r=>r.key===key); if(!rec||rec.cmp){toast("Impossible de coller ici");return;}
+  const sh=cur,bw=clip.w,bh=clip.h;
+  let px=ux-bw/2,py=uy-bh/2;
+  if(growCol(rec.col,px+bw+6)) saveMeta();
+  const W=S.colW[rec.col];
+  px=clamp(px,2,Math.max(2,W-bw-6)); py=bh>S.rowH-2?1:clamp(py,1,S.rowH-1-bh);
+  const list=clip.strokes.map(c=>({c:c.c,w:c.w,d:c.d.map((v,i)=>i%3===0?r1(v+px):i%3===1?r1(v+py):v),i:nextId()}));
+  clearSel(false);
+  putIn(sh,key,list); redrawKeys([key]);
+  pushOp({sh,keys:[key],
+    undo(){takeOut(sh,key,list);redrawKeys([key]);},
+    redo(){putIn(sh,key,list);redrawKeys([key]);}});
+  setSel(rec,list);
 }
 function delSel(){
   if(!sel) return;
@@ -936,11 +1032,80 @@ function fillSelects(){
   VIEWS.forEach((v,i)=>{const o=el("option",null,v.name); o.value=i; sv.appendChild(o);});
   fillSheetSelect();
 }
+/* ═══════════════ thèmes (ranger les feuilles) ═══════════════ */
+const NOTHEME="__none";
+function themeList(){const set=new Set(S.themes||[]); sheets.forEach(sh=>{if(sh.theme)set.add(sh.theme);}); return [...set];}
+const inTheme=sh=>S.theme===""||(S.theme===NOTHEME?!sh.theme:sh.theme===S.theme);
+const shLabel=sh=>(sh.theme?sh.theme+" › ":"")+sh.name;
+function fillThemeSelect(){
+  const t=$("selTheme"); t.innerHTML="";
+  const add=(v,l)=>{const o=el("option",null,l); o.value=v; t.appendChild(o);};
+  add("","🏷 Tous les thèmes");
+  themeList().forEach(n=>add(n,"🏷 "+n));
+  if(themeList().length&&sheets.some(sh=>!sh.theme)) add(NOTHEME,"🏷 Sans thème");
+  add("__manage","⚙ Gérer les thèmes…");
+  t.value=S.theme;
+  if(t.value!==S.theme){S.theme="";t.value="";}
+}
 function fillSheetSelect(){
   const s=$("selSheet"); s.innerHTML="";
-  sheets.forEach(sh=>{const o=el("option",null,sh.name+(isDue(sh)?"  🔔":(sh.rev&&sh.rev.on?"  ✅":""))); o.value=sh.id; s.appendChild(o);});
-  s.value=cur.id;
+  const vis=sheets.filter(inTheme); if(!vis.includes(cur)) vis.push(cur);
+  const groups=new Map(); const order=themeList(); order.push("");
+  order.forEach(g=>{const l=vis.filter(sh=>(sh.theme||"")===g); if(l.length) groups.set(g,l);});
+  const opt=sh=>{const o=el("option",null,sh.name+(isDue(sh)?"  🔔":(sh.rev&&sh.rev.on?"  ✅":""))); o.value=sh.id; return o;};
+  if(groups.size>1){
+    groups.forEach((l,g)=>{const og=document.createElement("optgroup"); og.label=g||"Sans thème"; l.forEach(sh=>og.appendChild(opt(sh))); s.appendChild(og);});
+  }else vis.forEach(sh=>s.appendChild(opt(sh)));
+  s.value=cur.id; fillThemeSelect();
 }
+function setThemeFilter(v){
+  S.theme=v; saveMeta();
+  const vis=sheets.filter(inTheme);
+  if(vis.length&&!vis.includes(cur)) switchSheet(vis[0].id); else fillSheetSelect();
+  if(!vis.length) toast("Aucune feuille dans ce thème : range-en une avec 📚 › 🏷",4200);
+}
+function newTheme(){
+  const n=prompt("Nom du nouveau thème (ex. Rencontre dans la rue) :"); if(!n||!n.trim()) return null;
+  const nm=n.trim(); if(!themeList().includes(nm)){S.themes.push(nm); saveMeta();} return nm;
+}
+function assignTheme(sh){
+  const body=el("div"); body.style.display="contents";
+  body.append(el("p",null,"Range cette feuille dans un thème pour la retrouver avec les autres feuilles du même sujet."));
+  const g=el("div","btns");
+  const mk=(t,f,on)=>{const b=el("button",on?"on":"",t); b.onclick=f; g.appendChild(b);};
+  const set=th=>{sh.theme=th; markDirty(sh,[]); closeModal(); fillSheetSelect(); openSheets();};
+  themeList().forEach(n=>mk(n,()=>set(n),sh.theme===n));
+  mk("Sans thème",()=>set(""),!sh.theme);
+  mk("＋ Nouveau thème…",()=>{const n=newTheme(); if(n) set(n);});
+  body.appendChild(g);
+  openModal("Thème de « "+sh.name+" »",body,[{t:"Annuler"}]);
+}
+function openThemes(){
+  const body=el("div"); body.style.display="contents";
+  body.append(el("p",null,"Un thème regroupe des feuilles (ex. « Rencontre dans la rue », « Au marché »). Il sert à filtrer la barre et à réviser un sujet précis ou un mélange dans l'outil de révision."));
+  const list=themeList();
+  if(!list.length) body.append(el("p",null,"Aucun thème pour l'instant."));
+  list.forEach(n=>{
+    const row=el("div","srow"), cnt=sheets.filter(sh=>sh.theme===n).length;
+    const nm=el("button","nm",n+" · "+cnt+" feuille"+(cnt>1?"s":"")); if(S.theme===n) nm.classList.add("on");
+    nm.onclick=()=>{closeModal(); setThemeFilter(n);};
+    const rn=el("button",null,"✎"); rn.title="Renommer";
+    rn.onclick=()=>{const x=prompt("Nouveau nom du thème :",n); if(!x||!x.trim()||x.trim()===n) return; const v=x.trim();
+      S.themes=S.themes.filter(t=>t!==n); if(!S.themes.includes(v)) S.themes.push(v);
+      sheets.forEach(sh=>{if(sh.theme===n){sh.theme=v; markDirty(sh,[]);}}); if(S.theme===n) S.theme=v;
+      saveMeta(); fillSheetSelect(); openThemes();};
+    const dl=el("button",null,"🗑"); dl.title="Supprimer le thème (les feuilles restent, sans thème)";
+    dl.onclick=()=>{if(!confirm("Supprimer le thème « "+n+" » ? Ses feuilles sont conservées, sans thème.")) return;
+      S.themes=S.themes.filter(t=>t!==n); sheets.forEach(sh=>{if(sh.theme===n){delete sh.theme; markDirty(sh,[]);}}); if(S.theme===n) S.theme="";
+      saveMeta(); fillSheetSelect(); openThemes();};
+    row.append(nm,rn,dl); body.appendChild(row);
+  });
+  openModal("Thèmes",body,[
+    {t:"＋ Nouveau thème",f:()=>{const n=newTheme(); if(n){fillSheetSelect();openThemes();}}},
+    {t:"Fermer",cls:"on"}
+  ]);
+}
+$("selTheme").onchange=e=>{const v=e.target.value; if(v==="__manage"){e.target.value=S.theme; openThemes();} else setThemeFilter(v);};
 function setView(i){
   S.view=(i+VIEWS.length)%VIEWS.length; answerHidden=false; revealed.clear(); saveMeta(); rebuild(true);
 }
@@ -1044,7 +1209,10 @@ function openRowModal(r){
 function openSheets(){
   const body=el("div");
   body.style.display="contents";
-  sheets.forEach(sh=>{
+  const gl=[...themeList(),""]; let lastG=null;
+  const ordered=[]; gl.forEach(g=>sheets.forEach(sh=>{if((sh.theme||"")===g) ordered.push(sh);}));
+  ordered.forEach(sh=>{
+    const g=sh.theme||""; if(g!==lastG&&(themeList().length)){body.appendChild(el("div","tg","🏷 "+(g||"Sans thème"))); lastG=g;}
     const row=el("div","srow"); const nm=el("button","nm",sh.name+(isDue(sh)?" 🔔":"")+(sh===cur?"  ✓":"")); if(sh===cur)nm.classList.add("on");
     nm.onclick=()=>{closeModal();switchSheet(sh.id);};
     const rn=el("button",null,"✎"); rn.title="Renommer";
@@ -1060,12 +1228,14 @@ function openSheets(){
       if(cur===sh){cur=sheets[0];S.sheet=cur.id;undoStack=[];redoStack=[];const L=getLock();if(L){Z=clamp(L,.35,2.6);zoomMode="locked";}else if(zoomMode==="locked")zoomMode="fit";rebuild(zoomMode==="fit");}
       saveMeta(); fillSheetSelect(); refreshBar(); openSheets();
     };
-    row.append(nm,rn,dp,dl); body.appendChild(row);
+    const tg=el("button",null,"🏷"); tg.title="Ranger dans un thème"; tg.onclick=()=>assignTheme(sh);
+    row.append(nm,tg,rn,dp,dl); body.appendChild(row);
   });
   openModal("Feuilles",body,[
+    {t:"🏷 Thèmes",f:()=>setTimeout(openThemes,0)},
     {t:"＋ Nouvelle feuille",f:()=>{
       const n=prompt("Nom de la nouvelle feuille :","Feuille "+(sheets.length+1)); if(!n||!n.trim())return;
-      const sh=newSheet(n.trim()); sheets.push(sh); markDirty(sh); saveMeta(); fillSheetSelect(); switchSheet(sh.id);
+      const sh=newSheet(n.trim()); if(S.theme&&S.theme!==NOTHEME) sh.theme=S.theme; sheets.push(sh); markDirty(sh); saveMeta(); fillSheetSelect(); switchSheet(sh.id);
     }},
     {t:"Fermer",cls:"on"}
   ]);
@@ -1079,7 +1249,7 @@ function buildCards(){
       const i=sh.rows[r];
       if(i&&i.ref&&i.fr){lines.push({n:r+1,thai:i.ref,fr:i.fr,st:i.st|0});if((i.st|0)===2)ko++;}
     }
-    if(lines.length){out.push({id:sh.id,name:sh.name,lines});total+=lines.length;}
+    if(lines.length){out.push({id:sh.id,name:sh.name,theme:sh.theme||"",lines});total+=lines.length;}
   });
   return {total,ko,data:{app:"fiche-thai-cartes",v:1,exported:new Date().toISOString(),sheets:out}};
 }
@@ -1122,7 +1292,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 6.0 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 6.2 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
@@ -1143,7 +1313,7 @@ async function saveFile(blob,name){
 }
 const today=()=>new Date().toISOString().slice(0,10);
 function exportJSON(){
-  const data={app:"fiche-thai",v:5,exported:new Date().toISOString(),settings:{colW:S.colW,rowH:S.rowH,log:S.log,goal:S.goal},sheets};
+  const data={app:"fiche-thai",v:5,exported:new Date().toISOString(),settings:{colW:S.colW,rowH:S.rowH,log:S.log,goal:S.goal,themes:themeList()},sheets};
   saveFile(new Blob([JSON.stringify(data)],{type:"application/json"}),"fiche-thai-"+today()+".json").then(ok=>{
     if(ok){S.lastExport=Date.now();saveMeta();refreshBar();toast("Sauvegarde exportée");}
   });
@@ -1203,7 +1373,7 @@ function legacySheets(o,widths){
   return out;
 }
 function normSheet(s){
-  return {id:uid(),name:String(s.name||"Feuille"),nRows:clamp(s.nRows|0||10,1,60),cells:s.cells||{},rows:s.rows||{},rev:(s.rev&&typeof s.rev==="object")?s.rev:null,t:Date.now()};
+  return {id:uid(),name:String(s.name||"Feuille"),nRows:clamp(s.nRows|0||10,1,60),cells:s.cells||{},rows:s.rows||{},rev:(s.rev&&typeof s.rev==="object")?s.rev:null,theme:String(s.theme||""),t:Date.now()};
 }
 function parseBackup(txt){
   const o=JSON.parse(txt);
@@ -1232,7 +1402,7 @@ function confirmImport(r){
   const apply=replace=>{
     if(replace){sheets.forEach(s=>dropSheetData(s.id));dirty.clear();sheets=[];}
     r.sheets.forEach(s=>{sheets.push(s);markDirty(s);});
-    if(r.settings&&replace){if(r.settings.colW)Object.assign(S.colW,r.settings.colW); if(r.settings.rowH)S.rowH=r.settings.rowH; if(r.settings.log&&typeof r.settings.log==="object")S.log=r.settings.log; if(r.settings.goal>0)S.goal=r.settings.goal;}
+    if(r.settings&&replace){if(r.settings.colW)Object.assign(S.colW,r.settings.colW); if(r.settings.rowH)S.rowH=r.settings.rowH; if(r.settings.log&&typeof r.settings.log==="object")S.log=r.settings.log; if(r.settings.goal>0)S.goal=r.settings.goal; if(Array.isArray(r.settings.themes))S.themes=r.settings.themes.map(String);}
     cur=replace?sheets[0]:r.sheets[0]; S.sheet=cur.id; undoStack=[];redoStack=[];revealed.clear();
     saveMeta(); fillSheetSelect(); rebuild(true); toast("Import réussi");
   };
@@ -1348,13 +1518,13 @@ function openRevisions(){
   const due=sheets.filter(isDue).sort((a,b)=>a.rev.due<b.rev.due?-1:1);
   body.appendChild(el("div","sec","À revoir aujourd'hui ("+due.length+")"));
   if(!due.length)body.appendChild(el("p",null,"Rien à revoir pour l'instant 🎉"));
-  due.forEach(sh=>body.appendChild(item("🔔 "+sh.name+" · "+inDays(sh.rev.due)+" · "+countLines(sh)+" lignes","on",()=>goTo(sh,openGrade))));
+  due.forEach(sh=>body.appendChild(item("🔔 "+shLabel(sh)+" · "+inDays(sh.rev.due)+" · "+countLines(sh)+" lignes","on",()=>goTo(sh,openGrade))));
   const up=sheets.filter(sh=>sh.rev&&sh.rev.on&&!isDue(sh)).sort((a,b)=>a.rev.due<b.rev.due?-1:1);
   if(up.length){body.appendChild(el("div","sec","À venir"));
-    up.forEach(sh=>body.appendChild(item("✅ "+sh.name+" · "+fmtD(sh.rev.due)+" ("+inDays(sh.rev.due)+")","",()=>goTo(sh,openFinish))));}
+    up.forEach(sh=>body.appendChild(item("✅ "+shLabel(sh)+" · "+fmtD(sh.rev.due)+" ("+inDays(sh.rev.due)+")","",()=>goTo(sh,openFinish))));}
   const pend=sheets.filter(sh=>!(sh.rev&&sh.rev.on)&&countLines(sh)>0);
   if(pend.length){body.appendChild(el("div","sec","Pas encore terminées"));
-    pend.forEach(sh=>body.appendChild(item("📝 "+sh.name+" · "+countLines(sh)+" lignes","",()=>goTo(sh,openFinish))));}
+    pend.forEach(sh=>body.appendChild(item("📝 "+shLabel(sh)+" · "+countLines(sh)+" lignes","",()=>goTo(sh,openFinish))));}
   body.appendChild(el("div","sec","7 derniers jours"));
   for(let i=6;i>=0;i--){
     const d=addDays(t,-i),x=S.log[d]||{n:0,r:0},v=(x.n||0)+(x.r||0),row=el("div","srow");
@@ -1382,7 +1552,7 @@ async function boot(){
       }
     }
   }catch(e){console.error("lecture",e);}
-  S.colW={...DEF_COLW,...(S.colW||{})};
+  S.colW={...DEF_COLW,...(S.colW||{})}; if(!Array.isArray(S.themes))S.themes=[]; if(typeof S.theme!=="string")S.theme="";
   let migrated=0;
   if(!sheets.length){
     try{
@@ -1395,7 +1565,10 @@ async function boot(){
     }catch(e){console.warn("migration",e);}
   }
   if(!sheets.length) sheets.push(newSheet("Feuille 1"));
-  cur=sheets.find(s=>s.id===S.sheet)||sheets[0]; S.sheet=cur.id;
+  cur=sheets.find(s=>s.id===S.sheet)||sheets[0];
+  if(S.theme&&S.theme!==NOTHEME&&!themeList().includes(S.theme)) S.theme="";
+  {const vis=sheets.filter(inTheme); if(vis.length&&!vis.includes(cur)) cur=vis[0];}
+  S.sheet=cur.id;
   if(!(S.view>=0&&S.view<VIEWS.length)) S.view=0;
   fillSelects();
   sheets.forEach(s=>{if(migrated)markDirty(s);}); legacyFmt.forEach(s=>markDirty(s));

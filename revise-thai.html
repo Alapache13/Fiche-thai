@@ -173,6 +173,7 @@ textarea{width:100%;background:var(--card-2);border:1px solid var(--border);bord
           <option value="replique">Réplique-réponse</option>
           <option value="structure">Structure</option>
           <option value="orthographe">🔤 Orthographe</option>
+          <option value="reconstitution">🧩 Reconstitution (mots → phrase)</option>
         </select>
       </label>
       <label id="orthoVariantLabel" style="display:none">Variante :
@@ -187,6 +188,12 @@ textarea{width:100%;background:var(--card-2);border:1px solid var(--border);bord
         <input type="checkbox" id="dueOnly"> À réviser
       </label>
       <button id="kbToggle" class="tiny">⌨ Thaï</button>
+    </section>
+
+    <section id="mixPanel" class="card hidden" style="padding:.6rem .8rem;margin-bottom:.8rem">
+      <div style="font-size:.85rem;margin-bottom:.4rem"><strong>🎲 Mélange</strong> — coche les situations à mélanger
+        <button class="tiny" id="mixAll" style="margin-left:.4rem">Tout</button><button class="tiny" id="mixNone">Rien</button></div>
+      <div id="mixList" style="display:flex;flex-wrap:wrap;gap:.3rem .9rem;font-size:.85rem"></div>
     </section>
 
     <!-- Carte question (modes normaux) -->
@@ -927,13 +934,42 @@ function buildPrefixExercise(item) {
     });
   }
 
+  /* ─── Filtre scénario / thème / mélange ─── */
+  let mixSet = new Set();                         // clés "f:<thème>" (fiche) ou "s:<scénario>" (cours)
+  const scenarioMatch = d => {
+    const sc = currentScenario;
+    if (sc === "all") return true;
+    if (sc === "mix") return mixSet.has(d.fromFiche ? "f:" + (d.fth || "") : "s:" + d.scenario);
+    if (sc.startsWith("fiche:th:")) return !!d.fromFiche && (d.fth || "") === sc.slice(9);
+    return d.scenario === sc;
+  };
+  const badgeOf = d => d.fromFiche && d.fth ? "✍️ " + d.fth : d.scenario;
+
+  /* ─── Reconstitution : la dernière ligne d'une feuille = la phrase, les lignes d'avant = ses mots ─── */
+  const sq = s => normalize(s).replace(/\s+/g, "");
+  function reconItems(list) {
+    const bySheet = new Map();
+    list.filter(d => d.fromFiche).forEach(d => {
+      const k = d.id.split("__")[1];
+      if (!bySheet.has(k)) bySheet.set(k, []);
+      bySheet.get(k).push(d);
+    });
+    const out = [];
+    bySheet.forEach(g => {
+      g.sort((a, b) => a.tour - b.tour);
+      if (g.length < 2) return;
+      const last = g[g.length - 1];
+      out.push({ ...last, recon: true, words: g.slice(0, -1).map(w => ({ thai: w.thai, fr: w.fr })) });
+    });
+    return out;
+  }
+
   /* ─── Pool ─── */
   function rebuildPool() {
-    let filtered = currentScenario === "all"
-      ? DIALOGUES
-      : DIALOGUES.filter(d => d.scenario === currentScenario);
+    let filtered = DIALOGUES.filter(scenarioMatch);
+    if (currentMode === "reconstitution") filtered = reconItems(filtered);
     if (dueOnly.checked) filtered = filtered.filter(isDue);
-    pool = (currentMode === "aleatoire" || currentMode === "replique" || currentMode === "orthographe")
+    pool = (currentMode === "aleatoire" || currentMode === "replique" || currentMode === "orthographe" || currentMode === "reconstitution")
       ? shuffle(filtered) : filtered.slice();
     index = 0;
     render();
@@ -1017,7 +1053,9 @@ function buildPrefixExercise(item) {
   function renderQuestion() {
     const item = pool[index];
     if (!item) {
-      promptFr.textContent = "Aucun tour disponible.";
+      promptFr.textContent = currentMode === "reconstitution"
+        ? "Aucune phrase à reconstituer ici : il faut une feuille de la fiche avec au moins 2 lignes tapées (les mots, puis la phrase en dernière ligne)."
+        : "Aucun tour disponible.";
       speaker.textContent = "";
       metaScenario.textContent = "";
       metaSousScenario.textContent = "";
@@ -1028,7 +1066,7 @@ function buildPrefixExercise(item) {
     const id = phraseId(item);
     const e = getEntry(id);
 
-    metaScenario.textContent = item.scenario;
+    metaScenario.textContent = badgeOf(item);
     metaSousScenario.textContent = item.sousScenario || "";
     metaRegistre.textContent = item.registre || "";
     metaBox.textContent = `Boîte ${e.box}`;
@@ -1045,6 +1083,10 @@ function buildPrefixExercise(item) {
         promptLabel.textContent = "Que dites-vous en thaï ?";
         promptFr.textContent = fillSlots(item.fr, item.slots, "exempleFr");
       }
+    } else if (item.recon) {
+      speaker.textContent = `🧩 ${item.words.length} mot${item.words.length > 1 ? "s" : ""} à assembler`;
+      promptLabel.textContent = "Reconstitue la phrase en thaï :";
+      promptFr.textContent = item.fr;
     } else {
       speaker.textContent = "";
       promptLabel.textContent = "Que dites-vous en thaï ?";
@@ -1075,7 +1117,7 @@ function buildPrefixExercise(item) {
 
     orthoVariantLabel.style.display = "flex";
 
-    orthoScenario.textContent = item.scenario;
+    orthoScenario.textContent = badgeOf(item);
     orthoBox.textContent = `Boîte ${e.box}`;
     orthoBox.className = "badge badge-box box-" + e.box;
     orthoFr.textContent = fillSlots(item.fr, item.slots, "exempleFr");
@@ -1332,7 +1374,7 @@ function buildPrefixExercise(item) {
     ];
     let best = "no";
     for (const t of targets) {
-      const r = isCloseEnough(normalize(userAns), normalize(t));
+      const r = item.recon ? isCloseEnough(sq(userAns), sq(t)) : isCloseEnough(normalize(userAns), normalize(t));
       if (r === "exact") { best = "exact"; break; }
       if (r === "close" && best !== "exact") best = "close";
     }
@@ -1374,7 +1416,13 @@ function buildPrefixExercise(item) {
     corrRom.textContent  = fillSlots(item.rom,  item.slots, "exempleRom");
     corrFr.textContent   = fillSlots(item.fr,   item.slots, "exempleFr");
 
-    if (item.slots && item.slots.length) {
+    if (item.recon && item.words) {
+      const ans = sq(answerInput.value || "");
+      corrSlots.innerHTML = "Les mots de la phrase :<br>" + item.words.map(w => {
+        const mark = ans ? (ans.includes(sq(w.thai)) ? "✓" : "✗") : "•";
+        return `${mark} <strong>${esc(w.thai)}</strong> — ${esc(w.fr)}`;
+      }).join("<br>");
+    } else if (item.slots && item.slots.length) {
       corrSlots.innerHTML = item.slots
         .map(s => `• <code>${s.cle}</code> → ${s.exempleFr} (${s.exempleRom})`)
         .join("<br>");
@@ -1450,9 +1498,7 @@ function buildPrefixExercise(item) {
     scoreEl.textContent = `Score : ${globalCounters.ok} / ${globalCounters.total}`;
   }
   function updateHeaderCounters() {
-    const filtered = currentScenario === "all"
-      ? DIALOGUES
-      : DIALOGUES.filter(d => d.scenario === currentScenario);
+    const filtered = DIALOGUES.filter(scenarioMatch);
     dueCount.textContent = `À réviser : ${countDue(filtered)}`;
   }
 
@@ -1636,18 +1682,43 @@ function buildPrefixExercise(item) {
     for (let i = DIALOGUES.length - 1; i >= 0; i--) if (DIALOGUES[i].fromFiche) DIALOGUES.splice(i, 1);
     ficheCards.forEach(c => DIALOGUES.push({
       id: "fiche__" + c.sheetId + "__" + c.n, fromFiche: true,
-      scenario: "fiche", theme: "Fiche", sousScenario: c.sheet, tour: c.n,
+      scenario: "fiche", theme: "Fiche", fth: c.th || "", sousScenario: c.sheet, tour: c.n,
       locuteur: "", registre: c.st === 2 ? "✗ à retravailler" : "",
       thai: c.thai, rom: "", fr: c.fr, slots: [], note: "", keywords: []
     }));
   }
 
+  const ficheThemes = () => [...new Set(DIALOGUES.filter(d => d.fromFiche).map(d => d.fth || ""))];
+  const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   function fillScenarioSelect() {
-    const scenarios = ["all", ...new Set(DIALOGUES.map(d => d.scenario))];
-    if (currentScenario !== "all" && !scenarios.includes(currentScenario)) currentScenario = "all";
-    scenarioSelect.innerHTML = scenarios
-      .map(s => `<option value="${s}"${s===currentScenario?" selected":""}>${s==="all"?"Tous":s==="fiche"?"✍️ fiche":s}</option>`)
-      .join("");
+    const opts = [["all", "Tous"]];
+    [...new Set(DIALOGUES.filter(d => !d.fromFiche).map(d => d.scenario))].forEach(s => opts.push([s, s]));
+    const ft = ficheThemes();
+    if (ft.length) {
+      opts.push(["fiche", "✍️ fiche (tout)"]);
+      ft.filter(t => t).forEach(t => opts.push(["fiche:th:" + t, "✍️ " + t]));
+      if (ft.includes("") && ft.length > 1) opts.push(["fiche:th:", "✍️ Sans thème"]);
+    }
+    opts.push(["mix", "🎲 Mélange…"]);
+    if (!opts.some(o => o[0] === currentScenario)) currentScenario = "all";
+    scenarioSelect.innerHTML = opts
+      .map(([v, l]) => `<option value="${esc(v)}"${v === currentScenario ? " selected" : ""}>${esc(l)}</option>`).join("");
+    renderMix();
+  }
+  function renderMix() {
+    const box = $("mixPanel"), list = $("mixList");
+    box.classList.toggle("hidden", currentScenario !== "mix");
+    if (currentScenario !== "mix") return;
+    const items = [];
+    ficheThemes().forEach(t => items.push(["f:" + t, "✍️ " + (t || "Sans thème")]));
+    [...new Set(DIALOGUES.filter(d => !d.fromFiche).map(d => d.scenario))].forEach(s => items.push(["s:" + s, s]));
+    list.innerHTML = items.map(([k, l]) =>
+      `<label style="display:flex;gap:.3rem;align-items:center"><input type="checkbox" data-k="${esc(k)}"${mixSet.has(k) ? " checked" : ""}> ${esc(l)}</label>`).join("");
+    list.querySelectorAll("input").forEach(cb => cb.addEventListener("change", () => {
+      cb.checked ? mixSet.add(cb.dataset.k) : mixSet.delete(cb.dataset.k);
+      saveMeta({ ...loadMeta(), mix: [...mixSet] }); rebuildPool();
+    }));
+    box.dataset.keys = JSON.stringify(items.map(i => i[0]));
   }
 
   function mergeFiche(incoming) {
@@ -1656,7 +1727,7 @@ function buildPrefixExercise(item) {
     incoming.forEach(c => {
       const key = c.sheetId + "__" + c.n, prev = map.get(key);
       if (!prev) added++;
-      else if (prev.thai !== c.thai || prev.fr !== c.fr || prev.sheet !== c.sheet || prev.st !== c.st) changed++;
+      else if (prev.thai !== c.thai || prev.fr !== c.fr || prev.sheet !== c.sheet || (prev.th || "") !== (c.th || "") || prev.st !== c.st) changed++;
       if (c.st === 2 && (!prev || prev.st !== 2)) { markToReview("fiche__" + key); flagged++; }
       map.set(key, c);
     });
@@ -1674,7 +1745,7 @@ function buildPrefixExercise(item) {
     const out = [];
     d.sheets.forEach(s => (s.lines || []).forEach(l => {
       if (l && l.thai && l.fr) out.push({
-        sheetId: String(s.id), sheet: String(s.name || "Feuille"), n: l.n | 0,
+        sheetId: String(s.id), sheet: String(s.name || "Feuille"), th: String(s.theme || ""), n: l.n | 0,
         thai: String(l.thai).normalize("NFC"), fr: String(l.fr), st: l.st | 0 });
     }));
     return out;
@@ -1686,7 +1757,7 @@ function buildPrefixExercise(item) {
       Object.keys(rows).forEach(r => {
         const x = rows[r];
         if (x && x.ref && x.fr) out.push({
-          sheetId: String(s.id), sheet: String(s.name || "Feuille"), n: (+r) + 1,
+          sheetId: String(s.id), sheet: String(s.name || "Feuille"), th: String(s.theme || ""), n: (+r) + 1,
           thai: String(x.ref).normalize("NFC"), fr: String(x.fr), st: x.st | 0 });
       });
     });
@@ -1815,6 +1886,7 @@ function buildPrefixExercise(item) {
     loadProgress();
     loadFiche();
     applyFiche();
+    try { mixSet = new Set(loadMeta().mix || []); } catch (e) { mixSet = new Set(); }
     fillScenarioSelect();
     modeSelect.value = currentMode;
     if (currentMode === "orthographe") orthoVariantLabel.style.display = "flex";
@@ -1824,6 +1896,12 @@ function buildPrefixExercise(item) {
 
     scenarioSelect.addEventListener("change", () => {
       currentScenario = scenarioSelect.value;
+      if (currentScenario === "mix" && !mixSet.size) {                 // 1re fois : tout cocher
+        const items = []; ficheThemes().forEach(t => items.push("f:" + t));
+        [...new Set(DIALOGUES.filter(d => !d.fromFiche).map(d => d.scenario))].forEach(s => items.push("s:" + s));
+        mixSet = new Set(items);
+      }
+      renderMix(); saveMeta({ ...loadMeta(), mix: [...mixSet] });
       saveProgress(); rebuildPool();
     });
     modeSelect.addEventListener("change", () => {
@@ -1835,6 +1913,12 @@ function buildPrefixExercise(item) {
       if (currentMode === "orthographe") renderOrtho();
     });
     dueOnly.addEventListener("change", () => rebuildPool());
+    const setMix = all => {
+      mixSet = new Set(all ? JSON.parse($("mixPanel").dataset.keys || "[]") : []);
+      saveMeta({ ...loadMeta(), mix: [...mixSet] }); renderMix(); rebuildPool();
+    };
+    $("mixAll").addEventListener("click", () => setMix(true));
+    $("mixNone").addEventListener("click", () => setMix(false));
     kbToggle.addEventListener("click", () => {
       const target = currentMode === "orthographe" ? keyboard2 : keyboard;
       target.classList.toggle("open");
