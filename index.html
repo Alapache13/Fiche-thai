@@ -1060,9 +1060,13 @@ function fillSheetSelect(){
 }
 function setThemeFilter(v){
   S.theme=v; saveMeta();
-  const vis=sheets.filter(inTheme);
+  let vis=sheets.filter(inTheme);
+  if(!vis.length&&v&&v!==NOTHEME){                       // thème encore vide : on lui crée une feuille vierge
+    const sh=newSheet(v+" 1"); sh.theme=v; sheets.push(sh); markDirty(sh); saveMeta(); vis=[sh];
+    toast("Feuille vierge « "+sh.name+" » créée dans le thème « "+v+" »",4200);
+  }
   if(vis.length&&!vis.includes(cur)) switchSheet(vis[0].id); else fillSheetSelect();
-  if(!vis.length) toast("Aucune feuille dans ce thème : range-en une avec 📚 › 🏷",4200);
+  if(!vis.length) toast("Aucune feuille sans thème",3000);
 }
 function newTheme(){
   const n=prompt("Nom du nouveau thème (ex. Rencontre dans la rue) :"); if(!n||!n.trim()) return null;
@@ -1233,7 +1237,7 @@ function openSheets(){
   });
   openModal("Feuilles",body,[
     {t:"🏷 Thèmes",f:()=>setTimeout(openThemes,0)},
-    {t:"＋ Nouvelle feuille",f:()=>{
+    {t:(S.theme&&S.theme!==NOTHEME?"＋ Nouvelle feuille (thème "+S.theme+")":"＋ Nouvelle feuille"),f:()=>{
       const n=prompt("Nom de la nouvelle feuille :","Feuille "+(sheets.length+1)); if(!n||!n.trim())return;
       const sh=newSheet(n.trim()); if(S.theme&&S.theme!==NOTHEME) sh.theme=S.theme; sheets.push(sh); markDirty(sh); saveMeta(); fillSheetSelect(); switchSheet(sh.id);
     }},
@@ -1292,7 +1296,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 6.2 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 6.3 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
