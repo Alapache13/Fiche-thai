@@ -1756,7 +1756,7 @@ function buildPrefixExercise(item) {
       const rows = s.rows || {};
       Object.keys(rows).forEach(r => {
         const x = rows[r];
-        if (x && x.ref && x.fr) out.push({
+        if (x && x.ref && x.fr && x.src !== "d") out.push({
           sheetId: String(s.id), sheet: String(s.name || "Feuille"), th: String(s.theme || ""), n: (+r) + 1,
           thai: String(x.ref).normalize("NFC"), fr: String(x.fr), st: x.st | 0 });
       });

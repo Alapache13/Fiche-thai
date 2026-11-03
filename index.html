@@ -1194,7 +1194,7 @@ function openRowModal(r){
     el("div","sec","Thaï"),ta,el("div","sec","Français"),fr);
   const save=()=>{
     const a=ta.value.trim(),b=fr.value.trim(),ri=cur.rows[r];
-    if((ri?ri.ref||"":"")!==a||(ri?ri.fr||"":"")!==b){const x=rowInfo(r);x.ref=a;x.fr=b;markDirty(cur,[]);}
+    if((ri?ri.ref||"":"")!==a||(ri?ri.fr||"":"")!==b){const x=rowInfo(r);x.ref=a;x.fr=b;delete x.src;markDirty(cur,[]);}
     refreshGut(r);
   };
   const go=d=>{save();const n=r+d;if(n<0||n>=cur.nRows){toast(d>0?"Dernière ligne de la feuille":"Première ligne");return;}openRowModal(n);};
@@ -1245,13 +1245,84 @@ function openSheets(){
   ]);
 }
 
+
+/* ═══════════════ dialogues du cours → feuilles ═══════════════ */
+const COURS_NOMS={taxi:"Taxi",marche:"Marché",restaurant:"Restaurant",aeroport:"Aéroport",hotel:"Hôtel",seven:"7-Eleven",massage:"Massage",pharmacie:"Pharmacie",gare_routiere:"Gare routière",temple:"Temple",plage:"Plage",scooter:"Scooter"};
+const coursNom=s=>COURS_NOMS[s]||(s.charAt(0).toUpperCase()+s.slice(1)).replace(/_/g," ");
+const fillS=(t,slots,key)=>!t?"":(!slots||!slots.length)?t:t.replace(/\{\{(\w+)\}\}/g,(_,k)=>{const x=slots.find(y=>y.cle===k);return x?x[key]:k;});
+function parseDialogues(txt){
+  const i=txt.indexOf("const DIALOGUES = ["); if(i<0) throw new Error("dialogues introuvables dans ce fichier");
+  const j=txt.indexOf("[",i); let d=0,q=null,k=j;
+  for(;k<txt.length;k++){
+    const c=txt[k];
+    if(q){if(c==="\\")k++; else if(c===q)q=null; continue;}
+    if(c==="/"&&txt[k+1]==="/"){k=txt.indexOf("\n",k); if(k<0)break; continue;}
+    if(c==="/"&&txt[k+1]==="*"){k=txt.indexOf("*/",k); if(k<0)break; k++; continue;}
+    if(c==='"'||c==="'"||c==="`"){q=c;continue;}
+    if(c==="[")d++; if(c==="]"){d--; if(!d)break;}
+  }
+  const arr=new Function("return "+txt.slice(j,k+1))();
+  if(!Array.isArray(arr)||!arr.length) throw new Error("liste vide");
+  return arr;
+}
+function openCours(){
+  const body=el("div"); body.style.display="contents";
+  const info=el("p",null,"Lecture des dialogues du cours…"); body.appendChild(info);
+  const box=el("div"); box.style.cssText="display:flex;flex-direction:column;gap:6px"; body.appendChild(box);
+  const state={items:null};
+  openModal("Dialogues du cours → feuilles",body,[
+    {t:"Annuler"},
+    {t:"Créer les feuilles",cls:"on",f:()=>makeCours(state,box)}
+  ]);
+  const show=arr=>{
+    state.items=arr; box.innerHTML="";
+    info.textContent=arr.length+" phrases trouvées. Coche les dialogues à transformer en feuilles : une feuille par dialogue, rangée dans son thème, avec le thaï et le français déjà tapés (les mots à compléter sont remplis avec l'exemple).";
+    const groups=new Map();
+    arr.forEach(d=>{if(!groups.has(d.scenario))groups.set(d.scenario,[]); groups.get(d.scenario).push(d);});
+    groups.forEach((l,sc)=>{
+      const exists=sheets.some(sh=>sh.cours===sc);
+      const lab=el("label"); lab.style.cssText="display:flex;gap:8px;align-items:center;font-size:15px"+(exists?";color:var(--mut)":"");
+      const cb=document.createElement("input"); cb.type="checkbox"; cb.dataset.sc=sc; cb.checked=!exists; cb.style.cssText="width:20px;height:20px";
+      lab.append(cb,document.createTextNode(coursNom(sc)+" — "+(l[0].theme||"Sans thème")+" · "+l.length+" phrase"+(l.length>1?"s":"")+(exists?" (déjà créée)":"")));
+      box.appendChild(lab);
+    });
+  };
+  const fallback=msg=>{
+    info.textContent=msg+" Choisis le fichier revise-thai.html (dans Fichiers) :";
+    const f=document.createElement("input"); f.type="file"; f.accept=".html,.js,.txt,text/html";
+    f.style.cssText="width:100%;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:10px";
+    f.onchange=()=>{const fl=f.files[0]; if(fl) fl.text().then(t=>{try{show(parseDialogues(t));}catch(e){info.textContent="Lecture impossible : "+e.message;}});};
+    box.innerHTML=""; box.appendChild(f);
+  };
+  fetch("revise-thai.html",{cache:"no-store"})
+    .then(r=>{if(!r.ok)throw new Error("introuvable"); return r.text();})
+    .then(t=>show(parseDialogues(t)))
+    .catch(()=>fallback("Lecture directe impossible depuis cette adresse."));
+}
+function makeCours(state,box){
+  if(!state.items){toast("Aucun dialogue lu : choisis d'abord le fichier");return;}
+  const picked=[...box.querySelectorAll("input[data-sc]:checked")].map(c=>c.dataset.sc);
+  if(!picked.length){toast("Rien de coché (ou tout est déjà créé)");return;}
+  let lines=0,first=null;
+  picked.forEach(sc=>{
+    const items=state.items.filter(d=>d.scenario===sc).sort((a,b)=>(a.tour||0)-(b.tour||0));
+    if(!items.length) return;
+    const sh=newSheet(coursNom(sc)); sh.theme=items[0].theme||""; sh.cours=sc; sh.nRows=Math.min(60,Math.max(10,items.length));
+    items.forEach((d,i)=>{sh.rows[i]={st:0,ref:fillS(d.thai,d.slots,"exemple"),fr:fillS(d.fr,d.slots,"exempleFr"),src:"d"}; lines++;});
+    sheets.push(sh); markDirty(sh); if(!first)first=sh;
+  });
+  S.theme=""; saveMeta(); fillSheetSelect();
+  if(first) switchSheet(first.id);
+  toast(picked.length+" feuille"+(picked.length>1?"s":"")+" créée"+(picked.length>1?"s":"")+" · "+lines+" lignes · rangées par thème",5000);
+}
+
 function buildCards(){
   const out=[];let total=0,ko=0;
   sheets.forEach(sh=>{
     const lines=[];
     for(let r=0;r<sh.nRows;r++){
       const i=sh.rows[r];
-      if(i&&i.ref&&i.fr){lines.push({n:r+1,thai:i.ref,fr:i.fr,st:i.st|0});if((i.st|0)===2)ko++;}
+      if(i&&i.ref&&i.fr&&i.src!=="d"){lines.push({n:r+1,thai:i.ref,fr:i.fr,st:i.st|0});if((i.st|0)===2)ko++;}
     }
     if(lines.length){out.push({id:sh.id,name:sh.name,theme:sh.theme||"",lines});total+=lines.length;}
   });
@@ -1283,6 +1354,9 @@ function openMenu(){
     btn("− Dernière ligne",()=>{closeModal();removeLastRow();}),
     btn("Vider la feuille",()=>{closeModal(); if(confirm("Vider toute la feuille ? (annulable avec ↶)"))clearSheet();},false,"bad")
   ]);
+  sec("Dialogues du cours",[
+    btn("📥 Créer des feuilles depuis les dialogues",()=>{closeModal();openCours();})
+  ]);
   sec("Révision thaï",[
     btn("📚 Envoyer mes lignes vers la révision",()=>{closeModal();sendToRevision();})
   ]);
@@ -1296,7 +1370,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 6.3 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 6.4 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
@@ -1377,7 +1451,7 @@ function legacySheets(o,widths){
   return out;
 }
 function normSheet(s){
-  return {id:uid(),name:String(s.name||"Feuille"),nRows:clamp(s.nRows|0||10,1,60),cells:s.cells||{},rows:s.rows||{},rev:(s.rev&&typeof s.rev==="object")?s.rev:null,theme:String(s.theme||""),t:Date.now()};
+  return {id:uid(),name:String(s.name||"Feuille"),nRows:clamp(s.nRows|0||10,1,60),cells:s.cells||{},rows:s.rows||{},rev:(s.rev&&typeof s.rev==="object")?s.rev:null,theme:String(s.theme||""),cours:s.cours||"",t:Date.now()};
 }
 function parseBackup(txt){
   const o=JSON.parse(txt);
