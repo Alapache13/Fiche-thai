@@ -1272,11 +1272,13 @@ function openCours(){
   const state={items:null};
   openModal("Dialogues du cours → feuilles",body,[
     {t:"Annuler"},
-    {t:"Créer les feuilles",cls:"on",f:()=>makeCours(state,box)}
+    {t:"Une feuille par dialogue",f:()=>makeCours(state,box)},
+    {t:"Mots puis phrase →",cls:"on",keep:true,f:()=>openMots(state,box)}
   ]);
   const show=arr=>{
     state.items=arr; box.innerHTML="";
-    info.textContent=arr.length+" phrases trouvées. Coche les dialogues à transformer en feuilles : une feuille par dialogue, rangée dans son thème, avec le thaï et le français déjà tapés (les mots à compléter sont remplis avec l'exemple).";
+    info.style.whiteSpace="pre-line";
+    info.textContent=arr.length+" phrases trouvées. Coche les dialogues, puis choisis :\n• « Une feuille par dialogue » : toutes les phrases du dialogue, thaï et français déjà tapés.\n• « Mots puis phrase » : une feuille par phrase, avec ses mots d'abord (à traduire par toi) puis la phrase en dernière ligne.\nChaque feuille est rangée dans le thème du dialogue.";
     const groups=new Map();
     arr.forEach(d=>{if(!groups.has(d.scenario))groups.set(d.scenario,[]); groups.get(d.scenario).push(d);});
     groups.forEach((l,sc)=>{
@@ -1314,6 +1316,62 @@ function makeCours(state,box){
   S.theme=""; saveMeta(); fillSheetSelect();
   if(first) switchSheet(first.id);
   toast(picked.length+" feuille"+(picked.length>1?"s":"")+" créée"+(picked.length>1?"s":"")+" · "+lines+" lignes · rangées par thème",5000);
+}
+
+function splitMots(t){
+  try{
+    const sg=new Intl.Segmenter("th",{granularity:"word"}),out=[];
+    for(const x of sg.segment(t)) if(x.isWordLike!==false&&/[฀-๿]/.test(x.segment)) out.push(x.segment);
+    return [...new Set(out)];
+  }catch(e){return null;}
+}
+function openMots(state,box){
+  if(!state.items){toast("Aucun dialogue lu : choisis d'abord le fichier");return;}
+  const picked=[...box.querySelectorAll("input[data-sc]:checked")].map(c=>c.dataset.sc);
+  if(!picked.length){toast("Coche au moins un dialogue");return;}
+  const todo=[];
+  picked.forEach(sc=>{
+    state.items.filter(d=>d.scenario===sc).sort((a,b)=>(a.tour||0)-(b.tour||0)).forEach((d,i)=>{
+      const key=sc+":"+(d.tour!=null?d.tour:i+1);
+      if(sheets.some(sh=>sh.cours===key)) return;
+      todo.push({sc,d,k:i+1,key,thai:fillS(d.thai,d.slots,"exemple"),fr:fillS(d.fr,d.slots,"exempleFr")});
+    });
+  });
+  if(!todo.length){toast("Tout est déjà créé en « mots + phrase »",3600);return;}
+  const body=el("div"); body.style.display="contents";
+  const seg=!!splitMots("ไป");
+  const intro=el("p",null,todo.length+" phrase"+(todo.length>1?"s":"")+" : une feuille chacune. Vérifie les mots (séparés par un espace) : retire, ajoute ou découpe-les comme tu veux. Ils seront les premières lignes, la phrase la dernière."+(seg?"":" Le découpage automatique n'est pas disponible sur cet appareil : tape les mots toi-même."));
+  body.appendChild(intro);
+  const inputs=[];
+  todo.forEach(p=>{
+    const w=el("div"); w.style.cssText="display:flex;flex-direction:column;gap:4px;padding-top:8px;border-top:1px solid var(--line)";
+    const h=el("div",null,coursNom(p.sc)+" · "+p.k+" — "+p.fr); h.style.cssText="font-size:13px;color:var(--mut)";
+    const t=el("div",null,p.thai); t.style.cssText="font-size:18px";
+    const inp=document.createElement("input"); inp.type="text"; inp.lang="th"; inp.value=(splitMots(p.thai)||[]).join(" ");
+    ["autocorrect","autocomplete","autocapitalize"].forEach(a=>inp.setAttribute(a,"off")); inp.spellcheck=false;
+    inp.placeholder="mots séparés par un espace";
+    inp.style.cssText="width:100%;font-size:17px;padding:8px;border:1px solid var(--line);border-radius:10px";
+    w.append(h,t,inp); body.appendChild(w); inputs.push({p,inp});
+  });
+  openModal("Mots puis phrase",body,[
+    {t:"◀ Retour",f:()=>openCours()},
+    {t:"Créer "+todo.length+" feuille"+(todo.length>1?"s":""),cls:"on",f:()=>makeMots(inputs)}
+  ]);
+}
+function makeMots(list){
+  const dict=new Map();   // traductions déjà tapées dans tes autres feuilles : réutilisées
+  sheets.forEach(sh=>{for(const r in sh.rows){const x=sh.rows[r]; if(x&&x.ref&&x.fr&&!dict.has(x.ref)) dict.set(x.ref,x.fr);}});
+  let n=0,toFill=0,first=null;
+  list.forEach(({p,inp})=>{
+    const words=inp.value.split(/\s+/).map(w=>w.trim()).filter(Boolean).slice(0,59);
+    const sh=newSheet(coursNom(p.sc)+" · "+p.k); sh.theme=p.d.theme||""; sh.cours=p.key; sh.nRows=Math.min(60,Math.max(10,words.length+1));
+    words.forEach((w,i)=>{const f=dict.get(w)||""; if(!f)toFill++; sh.rows[i]={st:0,ref:w,fr:f};});
+    sh.rows[words.length]={st:0,ref:p.thai,fr:p.fr};
+    sheets.push(sh); markDirty(sh); n++; if(!first)first=sh;
+  });
+  S.theme=""; saveMeta(); fillSheetSelect();
+  if(first) switchSheet(first.id);
+  toast(n+" feuille"+(n>1?"s":"")+" créée"+(n>1?"s":"")+" · "+toFill+" mot"+(toFill>1?"s":"")+" à traduire (touche le numéro de la ligne pour taper le français)",6500);
 }
 
 function buildCards(){
@@ -1370,7 +1428,7 @@ function openMenu(){
   ]);
   const info=el("p",null,"…"); body.appendChild(info);
   const last=S.lastExport?"Dernière sauvegarde exportée : "+new Date(S.lastExport).toLocaleDateString("fr-FR"):"Aucune sauvegarde exportée pour l'instant.";
-  const setInfo=extra=>{info.textContent="Version 6.4 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
+  const setInfo=extra=>{info.textContent="Version 6.5 · "+last+(store.mode==="mem"?" ⚠ Stockage du navigateur indisponible : données temporaires.":"")+(extra||"");};
   setInfo();
   if(navigator.storage&&navigator.storage.estimate){
     navigator.storage.estimate().then(e=>setInfo("  Espace utilisé : "+fmtBytes(e.usage||0)+(navigator.storage.persisted?"":"")))
