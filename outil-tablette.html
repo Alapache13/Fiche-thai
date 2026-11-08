@@ -304,7 +304,7 @@ function revokeAsset(id){const u=URLS.get(id);if(u){URL.revokeObjectURL(u);URLS.
 
 /* ════════════ État & modèle ════════════ */
 const S={notebooks:[],nb:null,pages:new Map(),pageId:null,layerIdx:0,tool:LS.get("tool","pen"),color:LS.get("color","#1c1917"),width:LS.get("width",3),zoom:1,fit:true,
- finger:LS.get("finger","auto"),penSeen:LS.get("penSeen",false),penDown:false,penUntil:0,sel:null,lock:LS.get("lock",false),linkTo:null,flash:null,prevTool:null,ui:LS.get("ui","auto"),pageMode:LS.get("pageMode","normal")};
+ finger:LS.get("finger","auto"),penSeen:LS.get("penSeen",false),penDown:false,penUntil:0,sel:null,lock:LS.get("lock",false),strokeMode:LS.get("strokeMode","simple"),linkTo:null,flash:null,prevTool:null,ui:LS.get("ui","auto"),pageMode:LS.get("pageMode","normal")};
 const BB=new WeakMap();
 const HIST=new Map();
 const dirty={pages:new Set(),nbs:new Set()};
@@ -342,7 +342,7 @@ function piece(x,s,i,n){const P=s.pts,a=i*3;x.lineWidth=wAt(s,P[a+2]);x.beginPat
  else if(i===n-1){x.moveTo((P[a-3]+P[a])/2,(P[a-2]+P[a+1])/2);x.lineTo(P[a],P[a+1])}
  else{x.moveTo((P[a-3]+P[a])/2,(P[a-2]+P[a+1])/2);x.quadraticCurveTo(P[a],P[a+1],(P[a]+P[a+3])/2,(P[a+1]+P[a+4])/2)}
  x.stroke()}
-function drawStroke(x,s){const P=s.pts,n=P.length/3;if(!n)return;setStyle(x,s);if(n===1){dot(x,s,P[0],P[1],P[2]);return}
+function drawStroke(x,s){const P=s.pts,n=P.length/3;if(!n)return;setStyle(x,s);if(s.m&&s.tool==="pen"){if(n===1){x.beginPath();x.arc(P[0],P[1],Math.max(.5,s.width/2),0,6.2832);x.fill();return}x.beginPath();x.moveTo(P[0],P[1]);for(let i=1;i<n;i++)x.lineTo(P[i*3],P[i*3+1]);x.stroke();return}if(n===1){dot(x,s,P[0],P[1],P[2]);return}
  if(s.tool==="pen"){for(let i=0;i<n;i++)piece(x,s,i,n);return}
  x.beginPath();x.moveTo(P[0],P[1]);x.lineTo((P[0]+P[3])/2,(P[1]+P[4])/2);for(let i=1;i<n-1;i++)x.quadraticCurveTo(P[i*3],P[i*3+1],(P[i*3]+P[i*3+3])/2,(P[i*3+1]+P[i*3+4])/2);x.lineTo(P[n*3-3],P[n*3-2]);x.stroke()}
 function bbox(s){let b=BB.get(s);if(!b){let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;const P=s.pts;for(let i=0;i<P.length;i+=3){if(P[i]<x1)x1=P[i];if(P[i]>x2)x2=P[i];if(P[i+1]<y1)y1=P[i+1];if(P[i+1]>y2)y2=P[i+1]}b=[x1,y1,x2,y2];BB.set(s,b)}return b}
@@ -385,20 +385,20 @@ function redo(){const h=hist(),a=h&&h.redo.pop();if(!a)return;applyAction(a,fals
 /* Entrées : stylo / surligneur / gomme */
 function drawInput(e){const page=curPage(),L=curLayer();if(!L){toast("Aucun calque");return null}if(!L.visible){toast("Ce calque est masqué (👁)");return null}
  const idx=S.layerIdx,cvs=layerCvs[idx],x=cvs.getContext("2d"),rect=paper.getBoundingClientRect(),z=S.zoom;
- const s={tool:S.tool,color:S.color,width:S.width,pts:[]},HL=s.tool==="highlighter";
+ const s={tool:S.tool,color:S.color,width:S.width,pts:[]},HL=s.tool==="highlighter",SM=s.tool==="pen"&&S.strokeMode==="simple";if(SM)s.m=1;
  let lx=-1e9,ly=-1e9,ps=null,snap=null,raf=0;
  if(HL){snap=document.createElement("canvas");snap.width=cvs.width;snap.height=cvs.height;snap.getContext("2d").drawImage(cvs,0,0)}
  const add=(ev,force)=>{const px=r1((ev.clientX-rect.left)/z),py=r1((ev.clientY-rect.top)/z);const p=ev.pointerType==="pen"?(ev.pressure||.5):.5;ps=ps==null?p:ps*.6+p*.4;if(!force&&Math.hypot(px-lx,py-ly)<.8)return false;s.pts.push(px,py,Math.round(ps*100)/100);lx=px;ly=py;return true};
  const base=()=>{x.setTransform(RS,0,0,RS,0,0);setStyle(x,s)};
  const liveHL=()=>{raf=0;x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,cvs.width,cvs.height);x.drawImage(snap,0,0);x.setTransform(RS,0,0,RS,0,0);drawStroke(x,s)};
  add(e,true);base();
- if(!HL){dot(x,s,s.pts[0],s.pts[1],s.pts[2])}else liveHL();
+ if(!HL){if(SM){x.beginPath();x.arc(s.pts[0],s.pts[1],Math.max(.5,s.width/2),0,6.2832);x.fill()}else dot(x,s,s.pts[0],s.pts[1],s.pts[2])}else liveHL();
  return{
-  move(e){const evs=(e.getCoalescedEvents&&e.getCoalescedEvents())||[];const list=evs.length?evs:[e];let any=false;
-   for(const ev of list)if(add(ev,false)){any=true;if(!HL){const n=s.pts.length/3;base();if(n===2)piece(x,s,0,n);else if(n>=3)piece(x,s,n-2,n)}}
+  move(e){const evs=SM?[]:((e.getCoalescedEvents&&e.getCoalescedEvents())||[]);const list=evs.length?evs:[e];let any=false;
+   for(const ev of list)if(add(ev,false)){any=true;if(!HL){const n=s.pts.length/3;base();if(SM){const P=s.pts;x.beginPath();x.moveTo(P[n*3-6],P[n*3-5]);x.lineTo(P[n*3-3],P[n*3-2]);x.stroke()}else if(n===2)piece(x,s,0,n);else if(n>=3)piece(x,s,n-2,n)}}
    if(any&&HL&&!raf)raf=requestAnimationFrame(liveHL)},
   end(e,cancel){if(raf)cancelAnimationFrame(raf);if(cancel){redrawLayer(idx);return}const n=s.pts.length/3;if(!n)return;
-   if(!HL){if(n>=2){base();piece(x,s,n-1,n)}}else liveHL();
+   if(!HL){if(!SM&&n>=2){base();piece(x,s,n-1,n)}}else liveHL();
    L.strokes.push(s);DIAG.strokes++;pushHist({k:"add",layerId:L.id,stroke:s});touchPage(page)}}}
 
 /* Gomme de traits */
@@ -560,7 +560,7 @@ async function buildBackup(onlyId){const parts=['{"format":"carnet-v2","exported
  parts.push("]}");return new Blob(parts,{type:"application/json"})}
 async function exportBackup(onlyId){if(!S.notebooks.length){toast("Rien à sauvegarder");return}toast("Préparation de la sauvegarde…",0);try{await flush();const b=await buildBackup(onlyId);hideToast();const nm=onlyId?slug(S.notebooks.find(n=>n.id===onlyId).name):"carnets";await deliverFile(b,nm+"-"+today()+".json");if(!onlyId)LS.set("lastBackup",Date.now())}catch(e){hideToast();toast("Erreur sauvegarde : "+e.message,5000)}}
 function normStroke(s){if(!s)return null;let pts;if(Array.isArray(s.pts))pts=s.pts.slice();else if(Array.isArray(s.points)){pts=[];s.points.forEach(p=>pts.push(r1(p.x),r1(p.y),Math.round((p.p==null?.5:p.p)*100)/100))}else return null;if(!pts.length||pts.length%3)return null;
- return{tool:["pen","highlighter","eraser"].includes(s.tool)?s.tool:"pen",color:s.color||"#1c1917",width:+s.width||3,pts}}
+ return{tool:["pen","highlighter","eraser"].includes(s.tool)?s.tool:"pen",color:s.color||"#1c1917",width:+s.width||3,pts,...(s.m?{m:1}:{})}}
 async function normPage(p,nbId,legacy,regenIds){let bg=null;const src=p.bgData||p.bgImage;if(src){bg=uid("as");await putAsset(bg,await dataURLToBlob(src))}
  let layers=(p.layers||[]).map(L=>({id:regenIds?uid("ly"):(L.id||uid("ly")),name:L.name||"Calque",visible:L.visible!==false,strokes:(L.strokes||[]).map(normStroke).filter(Boolean)}));if(!layers.length)layers=[mkLayer("Calque 1")];
  let tpl=p.template||"blank";if(legacy&&tpl==="grid")tpl="dots";if(!["blank","dots","lines","grid"].includes(tpl))tpl="blank";
@@ -595,11 +595,11 @@ async function openNotebook(id){const nb=S.notebooks.find(n=>n.id===id);if(!nb)r
 async function backToLibrary(){cancelInput();await flush();$("#editor").classList.add("hidden");$("#library").classList.remove("hidden");S.nb=null;S.pageId=null;updateBreadcrumb();renderLibrary()}
 
 /* ════════════ Menus ════════════ */
-function diagText(){const d=DIAG;return"Diagnostic d'écriture (depuis l'ouverture) : "+d.pen+" appuis du stylet · "+d.strokes+" traits enregistrés · "+d.cancel+" annulations du système · "+d.forced+" fins de trait récupérées."}
+function diagText(){const d=DIAG;return"Version du 8 nov. 2026 · tracé "+(S.strokeMode==="simple"?"simple":"lissé")+". Diagnostic d'écriture (depuis l'ouverture) : "+d.pen+" appuis du stylet · "+d.strokes+" traits enregistrés · "+d.cancel+" annulations du système · "+d.forced+" fins de trait récupérées."}
 async function storageInfo(){try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();return"Stockage utilisé : "+(e.usage/1048576).toFixed(1)+" Mo"+(e.quota?" sur ~"+Math.round(e.quota/1048576)+" Mo":"")}}catch(e){}return""}
 async function openMenu(){const lb=LS.get("lastBackup",0),info=await storageInfo();
  const items=[{info:(DB.ok?"Tes carnets sont enregistrés automatiquement sur cet appareil. ":"⚠ Le stockage du navigateur est indisponible : exporte régulièrement une sauvegarde. ")+(lb?"Dernière sauvegarde fichier : "+fmtDate(lb)+". ":"Aucune sauvegarde fichier pour l'instant. ")+info},
-  {info:diagText()},{sep:"Données"},{label:"💾 Exporter une sauvegarde complète (.json)",fn:()=>exportBackup()},{label:"📥 Importer une sauvegarde (.json ou ancien .html)",fn:async()=>{const f=await pickFile(".json,.html,application/json,text/html");if(f)importText(await f.text())}},{label:"📄 Nouveau carnet depuis un PDF",fn:async()=>{const f=await pickFile("application/pdf,.pdf");if(f)importPDF(f,null)}},
+  {info:diagText()},{sep:"Écriture"},{label:"✍️ Tracé : "+(S.strokeMode==="simple"?"simple (rapide)":"lissé (avec pression)")+" — toucher pour changer",fn:()=>{S.strokeMode=S.strokeMode==="simple"?"smooth":"simple";LS.set("strokeMode",S.strokeMode);toast("Tracé "+(S.strokeMode==="simple"?"simple (rapide)":"lissé (avec pression)")+" — pour les prochains traits",3000)}},{sep:"Données"},{label:"💾 Exporter une sauvegarde complète (.json)",fn:()=>exportBackup()},{label:"📥 Importer une sauvegarde (.json ou ancien .html)",fn:async()=>{const f=await pickFile(".json,.html,application/json,text/html");if(f)importText(await f.text())}},{label:"📄 Nouveau carnet depuis un PDF",fn:async()=>{const f=await pickFile("application/pdf,.pdf");if(f)importPDF(f,null)}},
   {sep:"Danger"},{label:"⚠️ Tout effacer",danger:true,fn:wipeAll}];menuModal("Menu",items)}
 async function wipeAll(){if(!await ask("Tout effacer ?","TOUS les carnets de cet appareil seront définitivement supprimés. Pense à exporter une sauvegarde avant.","Continuer",true))return;const t=await promptText("Confirmation","Tape EFFACER pour confirmer","","Effacer tout");if(t!=="EFFACER"){toast("Annulé");return}
  cancelInput();await DB.clearAll();S.notebooks=[];S.pages.clear();HIST.clear();MEM.clear();URLS.forEach(u=>URL.revokeObjectURL(u));URLS.clear();dirty.pages.clear();dirty.nbs.clear();S.nb=null;S.pageId=null;$("#editor").classList.add("hidden");$("#library").classList.remove("hidden");updateBreadcrumb();renderLibrary();setStatus("saved");toast("Tout a été effacé")}
