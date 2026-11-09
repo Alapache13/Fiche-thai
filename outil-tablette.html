@@ -110,6 +110,7 @@ input[type=color]::-moz-color-swatch{border:2px solid var(--border);border-radiu
 .marks{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;z-index:5}
 .pin{position:absolute;pointer-events:auto;width:28px;height:28px;border-radius:50%;border:2px solid var(--c,#0284c7);background:#fff;color:#000;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;transform-origin:0 0;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer;opacity:.93}
 .pin.ex{border-style:dashed}
+.dlog{position:fixed;left:6px;bottom:52px;z-index:3000;margin:0;padding:6px 8px;max-width:94vw;background:rgba(0,0,0,.8);color:#9ef;font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;pointer-events:none;white-space:pre-wrap}
 .zoomlbl{min-width:58px;font-variant-numeric:tabular-nums}
 .pagenav .sep{width:1px;height:24px;background:var(--border);margin:0 6px}
 .pagenav b{color:var(--text)}
@@ -245,6 +246,7 @@ input[type=color]::-moz-color-swatch{border:2px solid var(--border);border-radiu
   <div class="sheet-tools"><div class="chips" id="xChips"></div><input type="text" id="xSearch" placeholder="Rechercher dans les notes…" autocomplete="off"><button class="btn small" id="xScope"></button></div>
   <div class="sheet-body" id="xList"></div>
 </div>
+<pre class="dlog hidden" id="dlog"></pre>
 <div class="toast" id="toast"></div>
 <div class="overlay" id="modal"><div class="box" id="modalBox"></div></div>
 <input type="file" id="filePicker" style="position:fixed;left:-9999px;opacity:0">
@@ -399,7 +401,7 @@ function drawInput(e){const page=curPage(),L=curLayer();if(!L){toast("Aucun calq
    if(any&&HL&&!raf)raf=requestAnimationFrame(liveHL)},
   end(e,cancel){if(raf)cancelAnimationFrame(raf);if(cancel){redrawLayer(idx);return}const n=s.pts.length/3;if(!n)return;
    if(!HL){if(!SM&&n>=2){base();piece(x,s,n-1,n)}}else liveHL();
-   L.strokes.push(s);DIAG.strokes++;pushHist({k:"add",layerId:L.id,stroke:s});touchPage(page)}}}
+   L.strokes.push(s);DIAG.strokes++;pushHist({k:"add",layerId:L.id,stroke:s});if(S.diag){const a=inkAtStroke(idx,s);redrawLayer(idx);dlog("trait "+n+" pts · encre direct "+a+" / après redessin "+inkAtStroke(idx,s))}touchPage(page)}}}
 
 /* Gomme de traits */
 function strokeEraseInput(e){const page=curPage(),L=curLayer();if(!L||!L.visible){toast("Ce calque est masqué ou absent");return null}
@@ -432,8 +434,12 @@ function deleteSelection(){if(!S.sel)return;const page=curPage(),items=S.sel.ite
 
 /* ════════════ Gestes (stylo / doigt / pinch / pan) ════════════ */
 const ptrs=new Map();let input=null,gesture=null,mraf=0;
-const DIAG={pen:0,strokes:0,cancel:0,forced:0};
-function finishInput(){if(!input)return;const i=input;input=null;S.penDown=false;DIAG.forced++;try{i.end(null,false)}catch(err){console.warn(err)}}
+const DIAG={pen:0,strokes:0,cancel:0,forced:0,hover:0};
+const DLOG=[];
+function dlog(m){if(!S.diag)return;DLOG.push(((performance.now()/1000)%1000).toFixed(2)+" "+m);if(DLOG.length>14)DLOG.shift();$("#dlog").textContent=DLOG.join("\n")}
+const tgtName=e=>{const t=e.target;return t&&t.id?"#"+t.id:(t&&t.className&&typeof t.className==="string"?"."+t.className.split(" ")[0]:(t&&t.tagName)||"?")};
+function inkAtStroke(idx,s){try{const c=layerCvs[idx],P=s.pts,mi=Math.floor(P.length/6)*3,x0=clamp(Math.round(P[mi]*RS)-6,0,c.width-1),y0=clamp(Math.round(P[mi+1]*RS)-6,0,c.height-1),im=c.getContext("2d").getImageData(x0,y0,Math.max(1,Math.min(12,c.width-x0)),Math.max(1,Math.min(12,c.height-y0))).data;for(let i=3;i<im.length;i+=4)if(im[i]>100)return"oui";return"NON"}catch(err){return"?"}}
+function finishInput(){if(!input)return;const i=input;input=null;S.penDown=false;DIAG.forced++;dlog("trait précédent resté ouvert → terminé");try{i.end(null,false)}catch(err){console.warn(err)}}
 const fingerDraws=()=>S.finger==="draw"||(S.finger==="auto"&&!S.penSeen);
 function markPen(){if(S.penSeen)return;S.penSeen=true;LS.set("penSeen",true);toast("Stylet détecté : le doigt sert à déplacer/zoomer (bouton ☝️ pour changer)",3500)}
 function cancelInput(){if(input){const i=input;input=null;if(S.penDown)S.penDown=false;try{i.end(null,true)}catch(e){}}}
@@ -442,9 +448,9 @@ function startPan(id,x,y){cancelAnimationFrame(mraf);gesture={kind:"pan",id,x,y,
 function startPinch(){const t=touchesList();if(t.length<2)return;const a=t[0][1],b=t[1][1],cx=(a.x+b.x)/2,cy=(a.y+b.y)/2,r=paper.getBoundingClientRect();gesture={kind:"pinch",ids:[t[0][0],t[1][0]],d0:Math.hypot(a.x-b.x,a.y-b.y)||1,z0:S.zoom,px:(cx-r.left)/S.zoom,py:(cy-r.top)/S.zoom}}
 function startPan2(){const t=touchesList();if(t.length<2)return;const a=t[0][1],b=t[1][1],cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;gesture={kind:"pan2",ids:[t[0][0],t[1][0]],sx:cx,sy:cy,cx,cy,moved:false}}
 function momentum(vx,vy){cancelAnimationFrame(mraf);let last=performance.now();const step=t=>{const dt=t-last;last=t;vp.scrollLeft-=vx*dt;vp.scrollTop-=vy*dt;const f=Math.pow(.95,dt/16);vx*=f;vy*=f;if(Math.hypot(vx,vy)>.02)mraf=requestAnimationFrame(step)};mraf=requestAnimationFrame(step)}
-vp.addEventListener("pointerdown",e=>{if(!curPage())return;lastInputT=performance.now();if(e.pointerType==="mouse"&&e.button!==0)return;cancelAnimationFrame(mraf);
+vp.addEventListener("pointerdown",e=>{if(!curPage())return;lastInputT=performance.now();dlog("↓ "+e.pointerType+" #"+e.pointerId+" p="+(e.pressure||0).toFixed(2)+" b="+e.buttons+" "+tgtName(e));if(e.pointerType==="mouse"&&e.button!==0)return;cancelAnimationFrame(mraf);
  if(e.pointerType==="pen"){markPen();for(const [id,q] of [...ptrs])if(q.type==="touch")ptrs.delete(id);gesture=null;if(S.tool==="pen"||S.tool==="highlighter"||S.tool==="eraser")DIAG.pen++}
- if(e.pointerType==="touch"&&(S.penDown||performance.now()<S.penUntil))return;
+ if(e.pointerType==="touch"&&(S.penDown||performance.now()<S.penUntil)){dlog("doigt ignoré (paume)");return}
  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
  try{vp.setPointerCapture(e.pointerId)}catch(_){}
  const pn=e.target&&e.target.closest?e.target.closest(".pin"):null;S.tapPin=pn?{id:e.pointerId,el:pn,x:e.clientX,y:e.clientY,t:performance.now()}:null;
@@ -456,17 +462,19 @@ vp.addEventListener("pointermove",e=>{lastInputT=performance.now();if(e.pointerT
   else if(gesture.kind==="pan2"&&gesture.ids.includes(e.pointerId)){const a=ptrs.get(gesture.ids[0]),b=ptrs.get(gesture.ids[1]);if(!a||!b)return;const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;if(!gesture.moved){if(Math.hypot(cx-gesture.sx,cy-gesture.sy)<14)return;gesture.moved=true;gesture.cx=cx;gesture.cy=cy}vp.scrollLeft-=cx-gesture.cx;vp.scrollTop-=cy-gesture.cy;gesture.cx=cx;gesture.cy=cy}
   else if(gesture.kind==="pinch"&&gesture.ids.includes(e.pointerId)){const a=ptrs.get(gesture.ids[0]),b=ptrs.get(gesture.ids[1]);if(!a||!b)return;const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2,d=Math.hypot(a.x-b.x,a.y-b.y);S.fit=false;const z=clamp(gesture.z0*d/gesture.d0,.2,5);setZoom(z);const r2=paper.getBoundingClientRect();vp.scrollLeft+=r2.left-(cx-gesture.px*z);vp.scrollTop+=r2.top-(cy-gesture.py*z)}
   return}
- if(input&&input.id===e.pointerId){e.preventDefault();input.move(e)}});
+ if(input&&input.id===e.pointerId){if(e.pointerType!=="touch"&&e.buttons===0&&e.pressure===0){dlog("fin (survol sans appui)");DIAG.hover++;endPointer(e,false);return}e.preventDefault();input.move(e)}});
 function endPointer(e,cancel){lastInputT=performance.now();const had=ptrs.has(e.pointerId);ptrs.delete(e.pointerId);if(!had)return;
  let tapOpen=null;if(S.tapPin&&S.tapPin.id===e.pointerId){const tp=S.tapPin;S.tapPin=null;if(!cancel&&ptrs.size===0&&Math.hypot(e.clientX-tp.x,e.clientY-tp.y)<8&&performance.now()-tp.t<450)tapOpen=tp.el.dataset.x}
  if(tapOpen)setTimeout(()=>openSheet(tapOpen,true),0);
  if(input&&input.id===e.pointerId){const i=input;input=null;if(e.pointerType==="pen"){S.penDown=false;S.penUntil=performance.now()+800}i.end(e,cancel||!!tapOpen)}
  if(gesture){if(gesture.kind==="pan"&&gesture.id===e.pointerId){const g=gesture;gesture=null;if(!cancel&&Math.hypot(g.vx,g.vy)>.05)momentum(g.vx,g.vy)}
   else if((gesture.kind==="pinch"||gesture.kind==="pan2")&&gesture.ids.includes(e.pointerId)){gesture=null;const rest=touchesList()[0];if(rest&&!fingerDraws()&&!S.lock)startPan(rest[0],rest[1].x,rest[1].y)}}}
-vp.addEventListener("pointerup",e=>endPointer(e,false));
-vp.addEventListener("pointercancel",e=>{if(e.pointerType==="pen")DIAG.cancel++;endPointer(e,e.pointerType!=="pen")});
+window.addEventListener("pointerup",e=>{if(ptrs.has(e.pointerId)){dlog("↑ "+e.pointerType+" #"+e.pointerId+" "+tgtName(e));endPointer(e,false)}},true);
+window.addEventListener("pointercancel",e=>{if(!ptrs.has(e.pointerId))return;if(e.pointerType==="pen")DIAG.cancel++;dlog("✖ annulation "+e.pointerType+" #"+e.pointerId+(e.pointerType==="pen"?" (trait gardé)":""));endPointer(e,e.pointerType!=="pen")},true);
+vp.addEventListener("lostpointercapture",e=>{if(input&&input.id===e.pointerId){dlog("capture perdue → fin du trait");DIAG.forced++;endPointer(e,false)}});
 vp.addEventListener("wheel",e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();if(S.lock)return;S.fit=false;zoomAt(S.zoom*Math.exp(-e.deltaY*.01),e.clientX,e.clientY)}},{passive:false});
 vp.addEventListener("contextmenu",e=>e.preventDefault());
+["touchstart","touchmove"].forEach(t=>vp.addEventListener(t,ev=>{if(ev.cancelable)ev.preventDefault()},{passive:false}));
 document.addEventListener("gesturestart",e=>e.preventDefault());
 window.addEventListener("resize",()=>{if(S.fit&&curPage())setZoom(fitZoom())});
 
@@ -595,11 +603,11 @@ async function openNotebook(id){const nb=S.notebooks.find(n=>n.id===id);if(!nb)r
 async function backToLibrary(){cancelInput();await flush();$("#editor").classList.add("hidden");$("#library").classList.remove("hidden");S.nb=null;S.pageId=null;updateBreadcrumb();renderLibrary()}
 
 /* ════════════ Menus ════════════ */
-function diagText(){const d=DIAG;return"Version du 8 nov. 2026 · tracé "+(S.strokeMode==="simple"?"simple":"lissé")+". Diagnostic d'écriture (depuis l'ouverture) : "+d.pen+" appuis du stylet · "+d.strokes+" traits enregistrés · "+d.cancel+" annulations du système · "+d.forced+" fins de trait récupérées."}
+function diagText(){const d=DIAG;return"Version du 8 nov. 2026 · tracé "+(S.strokeMode==="simple"?"simple":"lissé")+". Diagnostic d'écriture (depuis l'ouverture) : "+d.pen+" appuis du stylet · "+d.strokes+" traits enregistrés · "+d.cancel+" annulations du système · "+d.forced+" fins de trait récupérées · "+d.hover+" fins au survol."}
 async function storageInfo(){try{if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();return"Stockage utilisé : "+(e.usage/1048576).toFixed(1)+" Mo"+(e.quota?" sur ~"+Math.round(e.quota/1048576)+" Mo":"")}}catch(e){}return""}
 async function openMenu(){const lb=LS.get("lastBackup",0),info=await storageInfo();
  const items=[{info:(DB.ok?"Tes carnets sont enregistrés automatiquement sur cet appareil. ":"⚠ Le stockage du navigateur est indisponible : exporte régulièrement une sauvegarde. ")+(lb?"Dernière sauvegarde fichier : "+fmtDate(lb)+". ":"Aucune sauvegarde fichier pour l'instant. ")+info},
-  {info:diagText()},{sep:"Écriture"},{label:"✍️ Tracé : "+(S.strokeMode==="simple"?"simple (rapide)":"lissé (avec pression)")+" — toucher pour changer",fn:()=>{S.strokeMode=S.strokeMode==="simple"?"smooth":"simple";LS.set("strokeMode",S.strokeMode);toast("Tracé "+(S.strokeMode==="simple"?"simple (rapide)":"lissé (avec pression)")+" — pour les prochains traits",3000)}},{sep:"Données"},{label:"💾 Exporter une sauvegarde complète (.json)",fn:()=>exportBackup()},{label:"📥 Importer une sauvegarde (.json ou ancien .html)",fn:async()=>{const f=await pickFile(".json,.html,application/json,text/html");if(f)importText(await f.text())}},{label:"📄 Nouveau carnet depuis un PDF",fn:async()=>{const f=await pickFile("application/pdf,.pdf");if(f)importPDF(f,null)}},
+  {info:diagText()},{sep:"Écriture"},{label:"✍️ Tracé : "+(S.strokeMode==="simple"?"simple (rapide)":"lissé (avec pression)")+" — toucher pour changer",fn:()=>{S.strokeMode=S.strokeMode==="simple"?"smooth":"simple";LS.set("strokeMode",S.strokeMode);toast("Tracé "+(S.strokeMode==="simple"?"simple (rapide)":"lissé (avec pression)")+" — pour les prochains traits",3000)}},{label:"🔍 Journal des événements du stylet : "+(S.diag?"activé":"désactivé")+" — toucher pour changer",fn:()=>{S.diag=!S.diag;DLOG.length=0;$("#dlog").textContent="";$("#dlog").classList.toggle("hidden",!S.diag);toast(S.diag?"Journal activé : écris, puis fais une capture d'écran":"Journal désactivé",3200)}},{sep:"Données"},{label:"💾 Exporter une sauvegarde complète (.json)",fn:()=>exportBackup()},{label:"📥 Importer une sauvegarde (.json ou ancien .html)",fn:async()=>{const f=await pickFile(".json,.html,application/json,text/html");if(f)importText(await f.text())}},{label:"📄 Nouveau carnet depuis un PDF",fn:async()=>{const f=await pickFile("application/pdf,.pdf");if(f)importPDF(f,null)}},
   {sep:"Danger"},{label:"⚠️ Tout effacer",danger:true,fn:wipeAll}];menuModal("Menu",items)}
 async function wipeAll(){if(!await ask("Tout effacer ?","TOUS les carnets de cet appareil seront définitivement supprimés. Pense à exporter une sauvegarde avant.","Continuer",true))return;const t=await promptText("Confirmation","Tape EFFACER pour confirmer","","Effacer tout");if(t!=="EFFACER"){toast("Annulé");return}
  cancelInput();await DB.clearAll();S.notebooks=[];S.pages.clear();HIST.clear();MEM.clear();URLS.forEach(u=>URL.revokeObjectURL(u));URLS.clear();dirty.pages.clear();dirty.nbs.clear();S.nb=null;S.pageId=null;$("#editor").classList.add("hidden");$("#library").classList.remove("hidden");updateBreadcrumb();renderLibrary();setStatus("saved");toast("Tout a été effacé")}
@@ -742,7 +750,7 @@ async function init(){applyTheme();if(mq.addEventListener)mq.addEventListener("c
  catch(e){console.warn(e);setStatus("error","⚠ Stockage indisponible");toast("Le stockage du navigateur est indisponible : exporte souvent une sauvegarde (💾).",6000)}
  updateBreadcrumb();renderLibrary();
  const lb=LS.get("lastBackup",0);if(S.notebooks.length&&Date.now()-lb>14*864e5)setTimeout(()=>toast("💾 Pense à exporter une sauvegarde de tes carnets",4500),1500)}
-window.__carnet={DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
+window.__carnet={DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
 init();
 })();
 </script>
