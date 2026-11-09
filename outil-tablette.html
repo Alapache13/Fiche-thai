@@ -112,6 +112,7 @@ input[type=color]::-moz-color-swatch{border:2px solid var(--border);border-radiu
 .pin.ex{border-style:dashed}
 .dlog{position:fixed;left:6px;bottom:52px;z-index:3000;margin:0;padding:6px 8px;max-width:94vw;background:rgba(0,0,0,.8);color:#9ef;font:11px/1.35 ui-monospace,Menlo,monospace;border-radius:8px;pointer-events:none;white-space:pre-wrap}
 .spk-inp{width:100%;box-sizing:border-box;font:600 1.5rem/1.4 "Thonburi","Sukhumvit Set",system-ui,sans-serif;padding:10px;border-radius:10px;border:1px solid var(--border,#8884);background:var(--surface,transparent);color:inherit;min-height:3.2em;resize:vertical}
+.pulse{animation:pls 1s ease-in-out infinite}@keyframes pls{50%{transform:scale(1.07)}}
 .spk-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 .zoomlbl{min-width:58px;font-variant-numeric:tabular-nums}
 .pagenav .sep{width:1px;height:24px;background:var(--border);margin:0 6px}
@@ -468,7 +469,7 @@ vp.addEventListener("pointermove",e=>{lastInputT=performance.now();if(e.pointerT
  if(input&&input.id===e.pointerId){if(e.pointerType!=="touch"&&e.buttons===0&&e.pressure===0){dlog("fin (survol sans appui)");DIAG.hover++;endPointer(e,false);return}e.preventDefault();input.move(e)}});
 function endPointer(e,cancel){lastInputT=performance.now();const had=ptrs.has(e.pointerId);ptrs.delete(e.pointerId);if(!had)return;
  let tapOpen=null;if(S.tapPin&&S.tapPin.id===e.pointerId){const tp=S.tapPin;S.tapPin=null;if(!cancel&&ptrs.size===0&&Math.hypot(e.clientX-tp.x,e.clientY-tp.y)<8&&performance.now()-tp.t<450)tapOpen=tp.el.dataset.x}
- if(S.tapSpk&&S.tapSpk.id===e.pointerId){const ts=S.tapSpk;S.tapSpk=null;if(!cancel&&ptrs.size===0&&Math.hypot(e.clientX-ts.x,e.clientY-ts.y)<8&&performance.now()-ts.t<450){const r=paper.getBoundingClientRect(),pg=curPage();if(pg)setTimeout(()=>speakAt(pg,(e.clientX-r.left)/S.zoom,(e.clientY-r.top)/S.zoom),0)}}
+ if(S.tapSpk&&S.tapSpk.id===e.pointerId){const ts=S.tapSpk;S.tapSpk=null;if(!cancel&&ptrs.size===0&&Math.hypot(e.clientX-ts.x,e.clientY-ts.y)<8&&performance.now()-ts.t<450){const r=paper.getBoundingClientRect(),pg=curPage();if(pg)speakAt(pg,(e.clientX-r.left)/S.zoom,(e.clientY-r.top)/S.zoom)}}
  if(tapOpen)setTimeout(()=>openSheet(tapOpen,true),0);
  if(input&&input.id===e.pointerId){const i=input;input=null;if(e.pointerType==="pen"){S.penDown=false;S.penUntil=performance.now()+800}i.end(e,cancel||!!tapOpen)}
  if(gesture){if(gesture.kind==="pan"&&gesture.id===e.pointerId){const g=gesture;gesture=null;if(!cancel&&Math.hypot(g.vx,g.vy)>.05)momentum(g.vx,g.vy)}
@@ -699,16 +700,17 @@ function hitText(page,x,y){const T=page.txt;if(!T||!T.length)return null;let bes
  if(!best||bd>14)return null;const str=best.s,fr=clamp((x-best.x)/best.w,0,.999);let idx=str.length-1;
  try{const c=hitText.cv||(hitText.cv=document.createElement("canvas").getContext("2d"));c.font='20px Thonburi,"Sukhumvit Set","Noto Sans Thai",sans-serif';const tot=c.measureText(str).width||1;for(let i=1;i<=str.length;i++){if(c.measureText(str.slice(0,i)).width/tot>fr){idx=i-1;break}}}catch(_){}
  return{word:wordAt(str,idx),line:str.trim()}}
-function speakThai(text,rate){if(!("speechSynthesis" in window)){toast("Synthèse vocale indisponible",3000);return}
- speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="th-TH";u.rate=rate;const v=speechSynthesis.getVoices().find(x=>/^th/i.test(x.lang));if(v)u.voice=v;else if(!speechSynthesis.getVoices().length)setTimeout(()=>{},0);speechSynthesis.speak(u)}
+function speakThai(text,rate,onStart){if(!("speechSynthesis" in window)){toast("Synthèse vocale indisponible",3000);return}
+ speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="th-TH";u.rate=rate;const v=speechSynthesis.getVoices().find(x=>/^th/i.test(x.lang));if(v)u.voice=v;if(onStart)u.onstart=onStart;speechSynthesis.speak(u)}
 async function speakAt(page,x,y){const h=hitText(page,x,y);if(!h){if(page.txt&&page.txt.length)toast("Aucun texte ici — touche directement un mot imprimé",2400);else{toast("Cette page n'a pas de texte sélectionnable : tape le mot",2600);speakBox("","")}return}speakBox(h.word,h.line)}
 function speakBox(word,line){modal("🔊 Écouter",(box,close)=>{const inp=el("textarea",{cls:"spk-inp",rows:"2",lang:"th",spellcheck:"false"});inp.value=word;
- const play=r=>{const t=inp.value.trim();if(!t){toast("Rien à lire",1500);return}speakThai(t,r)};
+ let started=false;const play=(r,auto)=>{const t=inp.value.trim();if(!t){toast("Rien à lire",1500);return}started=false;speakThai(t,r,()=>{started=true;btn.classList.remove("pulse")});if(auto)setTimeout(()=>{if(!started){btn.classList.add("pulse");hint.textContent="Safari a bloqué la lecture automatique : touche ▶ Écouter."}},900)};
  const noVoice=("speechSynthesis" in window)&&speechSynthesis.getVoices().length&&!speechSynthesis.getVoices().some(v=>/^th/i.test(v.lang));
- box.append(inp,el("div",{cls:"spk-row"},el("button",{cls:"btn primary",text:"▶ Écouter",on:{click:()=>play(.85)}}),el("button",{cls:"btn",text:"🐢 Lent",on:{click:()=>play(.55)}}),line&&line!==word?el("button",{cls:"btn",text:"↔ Ligne entière",on:{click:()=>{inp.value=line}}}):"",word?el("button",{cls:"btn",text:"Mot seul",on:{click:()=>{inp.value=word}}}):""),
-  el("p",{cls:"muted",text:noVoice?"⚠️ Aucune voix thaïe détectée sur cet appareil : Réglages iPad › Accessibilité › Contenu énoncé › Voix › Thaï.":"Tu peux corriger le texte avant de l'écouter."}),
+ const btn=el("button",{cls:"btn primary",text:"▶ Écouter",on:{click:()=>play(.85)}}),hint=el("p",{cls:"muted",text:noVoice?"⚠️ Aucune voix thaïe détectée sur cet appareil : Réglages iPad › Accessibilité › Contenu énoncé › Voix › Thaï.":"Tu peux corriger le texte avant de l'écouter."});
+ box.append(inp,el("div",{cls:"spk-row"},btn,el("button",{cls:"btn",text:"🐢 Lent",on:{click:()=>play(.55)}}),line&&line!==word?el("button",{cls:"btn",text:"↔ Ligne entière",on:{click:()=>{inp.value=line}}}):"",word?el("button",{cls:"btn",text:"Mot seul",on:{click:()=>{inp.value=word}}}):""),
+  hint,
   el("div",{cls:"actions"},el("button",{cls:"btn",text:"Fermer",on:{click:()=>{speechSynthesis.cancel();close(null)}}})));
- if(word)setTimeout(()=>play(.85),250);else setTimeout(()=>inp.focus(),80)})}
+ if(word)play(.85,true);else setTimeout(()=>inp.focus(),80)})}
 function speakInput(e){const page=curPage(),rect=paper.getBoundingClientRect(),z=S.zoom,x0=e.clientX,y0=e.clientY;let moved=false,t0=performance.now();
  return{move(ev){if(Math.hypot(ev.clientX-x0,ev.clientY-y0)>10)moved=true},end(ev,cancel){if(cancel||moved||performance.now()-t0>900)return;speakAt(page,(x0-rect.left)/z,(y0-rect.top)/z)}}}
 async function onExtractRect(page,r){try{const part=await makePart(page,r);
