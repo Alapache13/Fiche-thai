@@ -233,7 +233,8 @@ input[type=color]::-moz-color-swatch{border:2px solid var(--border);border-radiu
         <button class="nav-btn" id="prevBtn">◀</button>
         <span>Page <b id="curNum">1</b> / <span id="totNum">1</span></span>
         <button class="nav-btn" id="nextBtn">▶</button>
-        <button class="nav-btn" id="addPageBtn" title="Nouvelle page après celle-ci">+</button>
+        <button class="nav-btn" id="addPageBtn" title="Nouvelle page après celle-ci">＋ Page</button>
+        <button class="nav-btn" id="extendBtn" title="Rallonger cette page vers le bas (plus de place pour écrire)">↧ Rallonger</button>
         <span class="sep"></span>
         <button class="nav-btn" id="zoomOut">−</button>
         <button class="nav-btn zoomlbl" id="zoomFit" title="Ajuster à la largeur">100%</button>
@@ -508,6 +509,9 @@ function renderPagesSide(){const side=$("#pagesSide");side.replaceChildren();if(
 function updatePageNav(){const i=S.nb?S.nb.pageIds.indexOf(S.pageId):0,n=S.nb?S.nb.pageIds.length:1;$("#curNum").textContent=i+1;$("#totNum").textContent=n;$("#prevBtn").disabled=i<=0;$("#nextBtn").disabled=i>=n-1}
 function switchPage(id){if(id===S.pageId)return;cancelInput();S.pageId=id;S.layerIdx=0;if(S.nb){S.nb.last=id;dirty.nbs.add(S.nb.id);schedule()}renderPage();renderLayers();updatePageNav();updateUndoUI();$("#pagesSide").querySelectorAll(".thumb").forEach(t=>t.classList.toggle("active",t.dataset.id===id));const a=$("#pagesSide").querySelector(".thumb.active");if(a)a.scrollIntoView({block:"nearest"});vp.scrollTo(0,0)}
 const stepPage=d=>{const i=S.nb.pageIds.indexOf(S.pageId),j=clamp(i+d,0,S.nb.pageIds.length-1);if(j!==i)switchPage(S.nb.pageIds[j])};
+function extendPage(){const pg=curPage();if(!pg)return;if(pg.bg){toast("Page d'un PDF : ajoute plutôt une nouvelle page (＋ Page)",3200);return}
+ if(pg.h>=PH*4){toast("Page déjà très longue — ajoute une nouvelle page",2800);return}
+ const keep=vp.scrollTop;pg.h+=Math.round(PH*.5);dirty.pages.add(pg.id);touchPage(pg);renderPage();renderLayers();updateUndoUI();vp.scrollTop=keep;toast("Page rallongée ↧",1500)}
 function addPage(){const cur=curPage(),p=newPage(S.nb.id,{w:cur.w,h:cur.h,template:cur.bg?"blank":cur.template});S.pages.set(p.id,p);const i=S.nb.pageIds.indexOf(S.pageId);S.nb.pageIds.splice(i+1,0,p.id);dirty.pages.add(p.id);touchNb(S.nb);renderPagesSide();switchPage(p.id)}
 async function dupPage(id){const src=S.pages.get(id);if(!src)return;const p=JSON.parse(JSON.stringify(src));p.id=uid("pg");p.layers.forEach(L=>L.id=uid("ly"));if(src.bg){p.bg=uid("as");const b=await assetBlob(src.bg);if(b)await putAsset(p.bg,b);else p.bg=null}
  S.pages.set(p.id,p);const i=S.nb.pageIds.indexOf(id);S.nb.pageIds.splice(i+1,0,p.id);dirty.pages.add(p.id);touchNb(S.nb);renderPagesSide();switchPage(p.id);toast("Page dupliquée")}
@@ -637,7 +641,7 @@ function bindUI(){
  $("#fingerBtn").addEventListener("click",()=>setFinger(S.finger==="auto"?"draw":S.finger==="draw"?"nav":"auto",true));
  $("#pagesToggle").addEventListener("click",()=>togglePanel("pages"));$("#layersToggle").addEventListener("click",()=>togglePanel("layers"));
  $("#toolsBtn").addEventListener("click",openTools);$("#backBtn").addEventListener("click",backToLibrary);
- $("#prevBtn").addEventListener("click",()=>stepPage(-1));$("#nextBtn").addEventListener("click",()=>stepPage(1));$("#addPageBtn").addEventListener("click",addPage);$("#addLayerBtn").addEventListener("click",addLayer);
+ $("#prevBtn").addEventListener("click",()=>stepPage(-1));$("#nextBtn").addEventListener("click",()=>stepPage(1));$("#addPageBtn").addEventListener("click",addPage);$("#extendBtn").addEventListener("click",extendPage);$("#addLayerBtn").addEventListener("click",addLayer);
  $("#zoomIn").addEventListener("click",()=>zoomCenter(1.25));$("#zoomOut").addEventListener("click",()=>zoomCenter(.8));$("#zoomFit").addEventListener("click",()=>{if(S.lock){toast("🔒 Zoom verrouillé — touche le cadenas pour le modifier",1800);return}S.fit=true;setZoom(fitZoom())});$("#lockBtn").addEventListener("click",()=>setLock(!S.lock));$("#marksBtn").classList.toggle("on",marksOn);$("#marksBtn").addEventListener("click",()=>{marksOn=!marksOn;LS.set("marks",marksOn);$("#marksBtn").classList.toggle("on",marksOn);refreshMarkers();toast(marksOn?"📍 Repères d'extraits affichés":"Repères d'extraits masqués",1500)});setLock(S.lock,true);
  $("#selDel").addEventListener("click",deleteSelection);$("#selOff").addEventListener("click",()=>{S.sel=null;showSelBar(false);drawOv()});
  $("#menuBtn").addEventListener("click",openMenu);$("#xBtn").addEventListener("click",()=>openSheet());$("#libXBtn").addEventListener("click",()=>openSheet());$("#xClose").addEventListener("click",closeSheet);$("#xReview").addEventListener("click",startReview);$("#linkOff").addEventListener("click",()=>{S.linkTo=null;showLinkBar(false);toast("Liaison annulée",1200)});$("#xScope").addEventListener("click",()=>{X.only=null;X.scope=X.scope==="nb"?"all":"nb";LS.set("xscope",X.scope);renderSheet()});{let xt;$("#xSearch").addEventListener("input",e=>{X.q=e.target.value.trim();X.only=null;clearTimeout(xt);xt=setTimeout(()=>renderSheet(),180)})}$("#themeBtn").addEventListener("click",openAppearance);$("#backupBtn").addEventListener("click",()=>exportBackup());
@@ -788,7 +792,7 @@ async function init(){applyTheme();if(mq.addEventListener)mq.addEventListener("c
  catch(e){console.warn(e);setStatus("error","⚠ Stockage indisponible");toast("Le stockage du navigateur est indisponible : exporte souvent une sauvegarde (💾).",6000)}
  updateBreadcrumb();renderLibrary();
  const lb=LS.get("lastBackup",0);if(S.notebooks.length&&Date.now()-lb>14*864e5)setTimeout(()=>toast("💾 Pense à exporter une sauvegarde de tes carnets",4500),1500)}
-window.__carnet={thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
+window.__carnet={extendPage,addPage,thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
 init();
 })();
 </script>
