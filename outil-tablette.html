@@ -176,6 +176,7 @@ input[type=color]::-moz-color-swatch{border:2px solid var(--border);border-radiu
         <div class="acts">
           <button class="btn" id="libXBtn">🗂 Mes extraits</button>
           <button class="btn" id="libPdfBtn">📄 Nouveau carnet depuis un PDF</button>
+          <button class="btn" id="libTxtBtn" title="Conversation exportée, notes, texte thaï…">📝 Nouveau carnet depuis un .txt</button>
           <button class="btn" id="libImportBtn">📥 Importer une sauvegarde</button>
         </div>
       </div>
@@ -569,6 +570,43 @@ async function importPDF(file,nbTarget){if(!file)return;try{toast("Chargement de
  if(isNew)await openNotebook(nb.id);else{renderPagesSide();updatePageNav()}}
  catch(e){hideToast();console.error(e);toast("Erreur import PDF : "+e.message,5000)}}
 
+
+/* ════════════ Import d'un fichier .txt (conversation, notes…) ════════════ */
+const TXT_FONT='"Thonburi","Sukhumvit Set","Noto Sans Thai","Leelawadee UI",system-ui,sans-serif';
+const CHAT_RE=/^\[?(\d{1,4}[./-]\d{1,2}[./-]\d{1,4}),?\s+(\d{1,2}[:.]\d{2}(?::\d{2})?(?:\s?[AaPp][Mm])?)\]?\s*[-–—]?\s*([^:\n]{1,40}?):\s?(.*)$/;
+function wrapThai(c,str,maxW){const out=[];let cur="";let segs;try{segs=[...new Intl.Segmenter("th",{granularity:"word"}).segment(str)].map(g=>g.segment)}catch(_){segs=str.match(/\S+\s*|\s+/g)||[str]}
+ for(const g of segs){if(cur&&c.measureText((cur+g).trimEnd()).width>maxW){out.push(cur.trimEnd());cur=g.trimStart()}else cur+=g;
+  while(c.measureText(cur.trimEnd()).width>maxW&&cur.length>1){let k=cur.length-1;while(k>1&&c.measureText(cur.slice(0,k)).width>maxW)k--;out.push(cur.slice(0,k));cur=cur.slice(k)}}
+ if(cur.trim()||!out.length)out.push(cur.trimEnd());return out}
+async function importTXT(file,nbTarget){if(!file)return;try{
+ const raw=(await file.text()).replace(/^﻿/,"").replace(/[‎‏‪-‮]/g,"").replace(/\r\n?/g,"\n");if(!raw.trim()){toast("Fichier vide",2500);return}
+ toast("Mise en page du texte…",0);await sleep(0);
+ const FS=22,LH=40,ML=54,MR=54,MT=60,MB=60,maxW=PW-ML-MR,m=document.createElement("canvas").getContext("2d");
+ const cols=["#0f766e","#b45309","#6d28d9","#be123c"],who=new Map();let lastWho=null,lastDate=null;const blocks=[];
+ for(const ln of raw.split("\n")){const mm=ln.match(CHAT_RE);
+  if(mm){const[,d,t,nm,msg]=mm;if(d!==lastDate){blocks.push({k:"date",s:d});lastDate=d}if(!who.has(nm))who.set(nm,cols[who.size%cols.length]);
+   if(nm!==lastWho){blocks.push({k:"who",s:nm,t,c:who.get(nm)});lastWho=nm}blocks.push({k:"txt",s:msg})}
+  else blocks.push({k:ln.trim()?"txt":"gap",s:ln})}
+ const pages=[];let cur=null,y=0;const newP=()=>{cur={items:[],txt:[]};pages.push(cur);y=MT};newP();
+ const need=h=>{if(y+h>PH-MB)newP()};
+ for(const b of blocks){
+  if(b.k==="gap"){y+=LH*.45;continue}
+  if(b.k==="date"){need(LH*1.6);y+=LH*.3;cur.items.push({k:"date",s:b.s,y});y+=LH*.9;continue}
+  if(b.k==="who"){need(LH*2);y+=LH*.15;cur.items.push({k:"who",s:b.s,t:b.t,c:b.c,y});y+=LH*.7;continue}
+  m.font=FS+"px "+TXT_FONT;for(const l of wrapThai(m,b.s,maxW)){need(LH);cur.items.push({k:"txt",s:l,y});if(l.trim())cur.txt.push({s:thaiFix(l),x:ML,y:Math.round(y*10)/10,w:Math.round(Math.max(m.measureText(l).width,2)*10)/10,h:LH-6});y+=LH}}
+ let nb=nbTarget;const isNew=!nb;if(isNew){nb={id:uid("nb"),name:slug(file.name.replace(/\.txt$/i,"")).replace(/-/g," ").slice(0,60)||"Texte",createdAt:Date.now(),updatedAt:Date.now(),pageIds:[]};S.notebooks.unshift(nb)}
+ const cv=document.createElement("canvas");cv.width=PW*RS;cv.height=PH*RS;let added=0;
+ for(const pg of pages){toast("Import du texte… page "+(added+1)+" / "+pages.length,0);await sleep(0);
+  const x=cv.getContext("2d");x.setTransform(RS,0,0,RS,0,0);x.fillStyle="#fff";x.fillRect(0,0,PW,PH);x.textBaseline="alphabetic";
+  for(const it of pg.items){if(it.k==="date"){x.font="600 15px "+TXT_FONT;x.fillStyle="#94a3b8";x.textAlign="center";x.fillText("— "+it.s+" —",PW/2,it.y+LH*.7);x.textAlign="left"}
+   else if(it.k==="who"){x.font="700 17px "+TXT_FONT;x.fillStyle=it.c;x.fillText(it.s,ML,it.y+LH*.6);const w=x.measureText(it.s).width;x.font="14px "+TXT_FONT;x.fillStyle="#94a3b8";x.fillText("  "+it.t,ML+w,it.y+LH*.6)}
+   else{x.font=FS+"px "+TXT_FONT;x.fillStyle="#1c1917";x.fillText(it.s,ML,it.y+FS*1.25)}}
+  const blob=await toBlob(cv,"image/jpeg",.85),aid=uid("as");await putAsset(aid,blob);
+  const p=newPage(nb.id,{w:PW,h:PH});p.bg=aid;p.bgJpeg=true;p.bgPx=[cv.width,cv.height];if(pg.txt.length)p.txt=pg.txt;S.pages.set(p.id,p);nb.pageIds.push(p.id);await DB.tx("pages",t=>t.objectStore("pages").put(p));added++}
+ cv.width=cv.height=1;nb.updatedAt=Date.now();await DB.tx("notebooks",t=>t.objectStore("notebooks").put(nb));hideToast();toast("✅ "+added+" page(s) créée(s) depuis le texte"+(who.size?" · "+who.size+" interlocuteur(s) repéré(s)":""),3500);
+ if(isNew)await openNotebook(nb.id);else{renderPagesSide();updatePageNav()}}
+ catch(e){hideToast();console.error(e);toast("Erreur import texte : "+e.message,5000)}}
+
 /* ════════════ Sauvegarde / import de fichiers ════════════ */
 async function ensurePages(nb){if(DB.ok){const recs=await DB.pagesOf(nb.id);recs.forEach(r=>{if(!S.pages.has(r.id))S.pages.set(r.id,r)})}nb.pageIds=nb.pageIds.filter(id=>S.pages.has(id));if(!nb.pageIds.length){const p=newPage(nb.id);S.pages.set(p.id,p);nb.pageIds.push(p.id);dirty.pages.add(p.id);dirty.nbs.add(nb.id);schedule()}}
 async function buildBackup(onlyId){const parts=['{"format":"carnet-v2","exportedAt":'+Date.now()+',"notebooks":['];let first=true;
@@ -622,7 +660,7 @@ async function wipeAll(){if(!await ask("Tout effacer ?","TOUS les carnets de cet
  cancelInput();await DB.clearAll();S.notebooks=[];S.pages.clear();HIST.clear();MEM.clear();URLS.forEach(u=>URL.revokeObjectURL(u));URLS.clear();dirty.pages.clear();dirty.nbs.clear();S.nb=null;S.pageId=null;$("#editor").classList.add("hidden");$("#library").classList.remove("hidden");updateBreadcrumb();renderLibrary();setStatus("saved");toast("Tout a été effacé")}
 function openTools(){const page=curPage();menuModal("Outils du carnet",[
  {sep:"Page courante"},{label:"📷 Insérer une image en fond de page",fn:async()=>setBgImage(await pickFile("image/*"))},{label:"🧼 Retirer l'image de fond",fn:removeBg},{label:"🖼 Exporter la page en PNG",fn:exportPNG},{label:"📄 Exporter la page en PDF",fn:()=>exportPDF("page")},
- {sep:"Carnet"},{label:"📚 Exporter tout le carnet en PDF",fn:()=>exportPDF("all")},{label:"➕ Importer un PDF à la suite de ce carnet",fn:async()=>{const f=await pickFile("application/pdf,.pdf");if(f)importPDF(f,S.nb)}},{label:"⬇ Sauvegarder ce carnet (.json)",fn:()=>exportBackup(S.nb.id)}])}
+ {sep:"Carnet"},{label:"📚 Exporter tout le carnet en PDF",fn:()=>exportPDF("all")},{label:"➕ Importer un PDF à la suite de ce carnet",fn:async()=>{const f=await pickFile("application/pdf,.pdf");if(f)importPDF(f,S.nb)}},{label:"📝 Importer un .txt à la suite de ce carnet",fn:async()=>{const f=await pickFile(".txt,text/plain");if(f)importTXT(f,S.nb)}},{label:"⬇ Sauvegarder ce carnet (.json)",fn:()=>exportBackup(S.nb.id)}])}
 
 /* ════════════ Barre d'outils & raccourcis ════════════ */
 function setTool(t){if(t==="extract"&&S.tool!=="extract")S.prevTool=S.tool;if(t!=="extract"&&S.linkTo){S.linkTo=null;showLinkBar(false)}S.tool=t;if(t!=="extract"&&t!=="speak")LS.set("tool",t);document.querySelectorAll("#tools .tool-btn").forEach(b=>b.classList.toggle("active",b.dataset.tool===t));if(t!=="lasso"){S.sel=null;lassoPts=[];showSelBar(false);drawOv()}vp.style.cursor=(t==="lasso"||t==="extract")?"crosshair":t==="speak"?"pointer":"default"}
@@ -646,6 +684,7 @@ function bindUI(){
  $("#selDel").addEventListener("click",deleteSelection);$("#selOff").addEventListener("click",()=>{S.sel=null;showSelBar(false);drawOv()});
  $("#menuBtn").addEventListener("click",openMenu);$("#xBtn").addEventListener("click",()=>openSheet());$("#libXBtn").addEventListener("click",()=>openSheet());$("#xClose").addEventListener("click",closeSheet);$("#xReview").addEventListener("click",startReview);$("#linkOff").addEventListener("click",()=>{S.linkTo=null;showLinkBar(false);toast("Liaison annulée",1200)});$("#xScope").addEventListener("click",()=>{X.only=null;X.scope=X.scope==="nb"?"all":"nb";LS.set("xscope",X.scope);renderSheet()});{let xt;$("#xSearch").addEventListener("input",e=>{X.q=e.target.value.trim();X.only=null;clearTimeout(xt);xt=setTimeout(()=>renderSheet(),180)})}$("#themeBtn").addEventListener("click",openAppearance);$("#backupBtn").addEventListener("click",()=>exportBackup());
  $("#libPdfBtn").addEventListener("click",async()=>{const f=await pickFile("application/pdf,.pdf");if(f)importPDF(f,null)});
+ $("#libTxtBtn").addEventListener("click",async()=>{const f=await pickFile(".txt,text/plain");if(f)importTXT(f,null)});
  $("#libImportBtn").addEventListener("click",async()=>{const f=await pickFile(".json,.html,application/json,text/html");if(f)importText(await f.text())});
  document.addEventListener("keydown",e=>{if(closeCur&&e.key==="Escape"){closeCur(null);return}if(e.key==="Escape"&&!$("#extSheet").classList.contains("hidden")){closeSheet();return}if(e.target.matches("input,textarea"))return;const mod=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
   if(mod&&k==="z"&&!e.shiftKey){e.preventDefault();undo()}else if(mod&&(k==="y"||(k==="z"&&e.shiftKey))){e.preventDefault();redo()}else if(mod&&k==="s"){e.preventDefault();exportBackup()}
@@ -792,7 +831,7 @@ async function init(){applyTheme();if(mq.addEventListener)mq.addEventListener("c
  catch(e){console.warn(e);setStatus("error","⚠ Stockage indisponible");toast("Le stockage du navigateur est indisponible : exporte souvent une sauvegarde (💾).",6000)}
  updateBreadcrumb();renderLibrary();
  const lb=LS.get("lastBackup",0);if(S.notebooks.length&&Date.now()-lb>14*864e5)setTimeout(()=>toast("💾 Pense à exporter une sauvegarde de tes carnets",4500),1500)}
-window.__carnet={extendPage,addPage,thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
+window.__carnet={importTXT,extendPage,addPage,thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
 init();
 })();
 </script>
