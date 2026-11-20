@@ -763,11 +763,16 @@ const THAI_MARK=/[ัิ-ฺ็-๎]/;
 function wordAt(str,idx){idx=clamp(idx,0,str.length-1);
  try{if(window.Intl&&Intl.Segmenter){for(const g of new Intl.Segmenter("th",{granularity:"word"}).segment(str)){if(idx>=g.index&&idx<g.index+g.segment.length&&g.segment.trim())return g.segment.trim()}}}catch(_){}
  let a=idx,b=idx;while(a>0&&!/\s/.test(str[a-1]))a--;while(b<str.length-1&&!/\s/.test(str[b+1]))b++;return str.slice(a,b+1)}
+const SEGS=new WeakMap();
+function lineSegs(page){let r=SEGS.get(page.txt);if(r)return r;const rows=[];
+ [...page.txt].map(t=>({t,c:t.y+t.h/2})).sort((a,b)=>a.c-b.c||a.t.x-b.t.x).forEach(o=>{const w=rows.find(q=>Math.abs(q.c-o.c)<o.t.h*.4);if(w)w.a.push(o.t);else rows.push({c:o.c,a:[o.t]})});
+ r=[];for(const q of rows){q.a.sort((a,b)=>a.x-b.x);let cur=null;for(const t of q.a){const h=t.h;if(cur&&t.x-cur.x2<=h*2.2){cur.s+=(t.x-cur.x2>h*.2?" ":"")+t.s;cur.x2=Math.max(cur.x2,t.x+t.w);cur.items.push(t)}else{cur={s:t.s,x2:t.x+t.w,items:[t]};r.push(cur)}}}
+ SEGS.set(page.txt,r);return r}
 function hitText(page,x,y){const T=page.txt;if(!T||!T.length)return null;let best=null,bd=1e9;
  for(const t of T){const dx=x<t.x?t.x-x:x>t.x+t.w?x-t.x-t.w:0,dy=y<t.y?t.y-y:y>t.y+t.h?y-t.y-t.h:0,d=Math.hypot(dx,dy);if(d<bd){bd=d;best=t}}
  if(!best||bd>14)return null;const str=best.s,fr=clamp((x-best.x)/best.w,0,.999);let idx=str.length-1;
  try{const c=hitText.cv||(hitText.cv=document.createElement("canvas").getContext("2d"));c.font='20px Thonburi,"Sukhumvit Set","Noto Sans Thai",sans-serif';const tot=c.measureText(str).width||1;for(let i=1;i<=str.length;i++){if(c.measureText(str.slice(0,i)).width/tot>fr){idx=i-1;break}}}catch(_){}
- return{word:wordAt(str,idx),line:str.trim()}}
+ const sg=lineSegs(page).find(g=>g.items.includes(best));return{word:wordAt(str,idx),line:(sg?sg.s:str).trim()}}
 function speakThai(text,rate,onStart){if(!("speechSynthesis" in window)){toast("Synthèse vocale indisponible",3000);return}
  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="th-TH";u.rate=rate;const v=speechSynthesis.getVoices().find(x=>/^th/i.test(x.lang));if(v)u.voice=v;if(onStart)u.onstart=onStart;speechSynthesis.speak(u)}
 async function speakAt(page,x,y){const h=hitText(page,x,y);if(!h){if(page.txt&&page.txt.length)toast("Aucun texte ici — touche directement un mot imprimé",2400);else{toast("Cette page n'a pas de texte sélectionnable : tape le mot",2600);speakBox("","")}return}speakBox(h.word,h.line)}
@@ -776,7 +781,7 @@ function speakBox(word,line){modal("🔊 Écouter",(box,close)=>{const inp=el("t
  let started=false;const play=(r,auto)=>{const t=inp.value.trim();if(!t){toast("Rien à lire",1500);return}started=false;speakThai(t,r,()=>{started=true;btn.classList.remove("pulse")});if(auto)setTimeout(()=>{if(!started){btn.classList.add("pulse");hint.textContent="Safari a bloqué la lecture automatique : touche ▶ Écouter."}},900)};
  const noVoice=("speechSynthesis" in window)&&speechSynthesis.getVoices().length&&!speechSynthesis.getVoices().some(v=>/^th/i.test(v.lang));
  const btn=el("button",{cls:"btn primary",text:"▶ Écouter",on:{click:()=>play(.85)}}),hint=el("p",{cls:"muted",text:noVoice?"⚠️ Aucune voix thaïe détectée sur cet appareil : Réglages iPad › Accessibilité › Contenu énoncé › Voix › Thaï.":"Tu peux corriger le texte avant de l'écouter."});
- box.append(inp,el("div",{cls:"spk-row"},btn,el("button",{cls:"btn",text:"🐢 Lent",on:{click:()=>play(.55)}}),el("button",{cls:"btn",text:"📋 Copier",on:{click:()=>copyText(inp)}}),curPage()&&curPage().txt&&curPage().txt.length?el("button",{cls:"btn",text:"Toute la page",on:{click:()=>{inp.value=curPage().txt.map(t=>t.s).join("\n")}}}):"",line&&line!==word?el("button",{cls:"btn",text:"↔ Ligne entière",on:{click:()=>{inp.value=line}}}):"",word?el("button",{cls:"btn",text:"Mot seul",on:{click:()=>{inp.value=word}}}):""),
+ box.append(inp,el("div",{cls:"spk-row"},btn,el("button",{cls:"btn",text:"🐢 Lent",on:{click:()=>play(.55)}}),el("button",{cls:"btn",text:"📋 Copier",on:{click:()=>copyText(inp)}}),curPage()&&curPage().txt&&curPage().txt.length?el("button",{cls:"btn",text:"Toute la page",on:{click:()=>{inp.value=lineSegs(curPage()).map(g=>g.s.trim()).join("\n")}}}):"",line&&line!==word?el("button",{cls:"btn",text:"↔ Ligne entière",on:{click:()=>{inp.value=line}}}):"",word?el("button",{cls:"btn",text:"Mot seul",on:{click:()=>{inp.value=word}}}):""),
   hint,
   el("div",{cls:"actions"},el("button",{cls:"btn",text:"Fermer",on:{click:()=>{speechSynthesis.cancel();close(null)}}})));
  if(word)play(.85,true);else setTimeout(()=>inp.focus(),80)})}
@@ -857,7 +862,7 @@ async function init(){applyTheme();if(mq.addEventListener)mq.addEventListener("c
  catch(e){console.warn(e);setStatus("error","⚠ Stockage indisponible");toast("Le stockage du navigateur est indisponible : exporte souvent une sauvegarde (💾).",6000)}
  updateBreadcrumb();renderLibrary();
  const lb=LS.get("lastBackup",0);if(S.notebooks.length&&Date.now()-lb>14*864e5)setTimeout(()=>toast("💾 Pense à exporter une sauvegarde de tes carnets",4500),1500)}
-window.__carnet={copySelection,pasteClip,liftFromErasers,importTXT,extendPage,addPage,thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
+window.__carnet={lineSegs,copySelection,pasteClip,liftFromErasers,importTXT,extendPage,addPage,thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
 init();
 })();
 </script>
