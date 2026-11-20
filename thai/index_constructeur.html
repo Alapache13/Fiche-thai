@@ -89,6 +89,20 @@
   #reader-detail .entry { border-top:1px solid var(--border); padding:10px 0; }
   #reader-detail .entry:first-child { border-top:none; }
   #reader-text { width:100%; height:140px; font-size:18px; }
+  #tone-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:2000; align-items:flex-end; justify-content:center; }
+  #tone-sheet { background:var(--bg); border:1px solid var(--accent); border-radius:14px 14px 0 0; width:100%; max-width:720px; max-height:88vh; display:flex; flex-direction:column; }
+  #tone-head { display:flex; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--border); }
+  #tone-head b { flex:1; color:var(--accent); }
+  #tone-body { overflow:auto; padding:10px 12px 20px; }
+  .tword { margin-bottom:18px; } .tw-h { font-size:24px; margin-bottom:6px; } .tmuted { color:var(--muted); font-size:13px; }
+  .tstrip { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; } .tchip { color:#000; font-weight:bold; border-radius:14px; padding:3px 10px; font-size:16px; }
+  .tsy { border-left:5px solid; background:var(--card); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:14px; line-height:1.45; }
+  .tsy ul { margin:4px 0 4px 18px; } .tsy-h { display:flex; gap:10px; align-items:baseline; } .tsy-th { font-size:22px; font-weight:bold; } .tsy-ro { color:var(--muted); }
+  .tsy-t { font-size:16px; margin-top:4px; } .tsy-rule { color:var(--muted); font-size:13px; margin-top:2px; }
+  .tchk { display:inline-block; font-size:12px; border-radius:6px; padding:2px 6px; margin-top:4px; } .tchk.ok { background:rgba(16,185,129,.18); color:#34d399; } .tchk.ko { background:rgba(245,158,11,.18); color:#fbbf24; }
+  .tbtn { background:var(--bg); color:var(--text); border:2px solid; padding:6px 12px; margin:0 3px; font-size:16px; } .tsy-q { margin-top:6px; }
+  .trow { padding:6px 4px; border-bottom:1px solid var(--border); cursor:pointer; } .tonebtn { background:transparent; border:1px solid var(--border); color:var(--accent); padding:3px 7px; font-size:12px; border-radius:6px; }
+  #tone-test.on { background:var(--accent); color:#000; }
 </style>
 </head>
 <body>
@@ -128,6 +142,7 @@
       <button id="mode-detail" class="ghost" onclick="setSensMode('detail')" title="Sens principal, puis les autres sens entre parenthèses">Détaillé</button>
       <span style="font-size:12px;">Touche le sens sous un mot pour changer de nuance.</span>
     </div>
+    <button style="margin-top:10px;" onclick="toneForPhrase()" title="Explication des tons, syllabe par syllabe">🔊 Pourquoi ces tons ? (phrase entière)</button>
     <button class="claude-btn" style="margin-top:10px;" onclick="askClaudePhrase()" title="Copie une demande toute prête à coller dans Claude">🤖 Demander à Claude de vérifier</button>
     <button class="claude-btn" style="margin-top:10px;" onclick="pasteAvis(null)" title="Colle la réponse de Claude : elle sera rangée avec la phrase quand tu l'enregistres">📥 Coller le verdict de Claude</button>
     <button style="margin-top:10px;" onclick="copyPhrase()">📋 Copier la phrase</button>
@@ -240,6 +255,12 @@
 
 <div id="p-config" class="panel">
   <div class="import-block">
+    <h3>🔊 Rapport de concordance des tons</h3>
+    <p>Compare, pour tout ton lexique, les tons calculés par les règles avec ceux de ta romanisation.</p>
+    <button onclick="toneReport()">Lancer le rapport</button>
+    <div id="tone-report" style="margin-top:10px;"></div>
+  </div>
+  <div class="import-block">
     <h3>📱 Importer des fichiers (téléphone ou ordinateur)</h3>
     <p>Choisis un ou plusieurs fichiers : le lexique exporté, les phrases, les règles de grammaire, ou le fichier « tout-en-un ». L'outil reconnaît tout seul le contenu. Le lexique est ensuite gardé dans cet appareil : tu n'as pas à le recharger à chaque ouverture.</p>
     <input type="file" id="fileInput" multiple>
@@ -285,6 +306,7 @@
   </div>
 </div>
 
+<div id="tone-modal" onclick="if(event.target===this)closeTone()"><div id="tone-sheet"><div id="tone-head"><b>🔊 Pourquoi ce ton ?</b><button id="tone-test" class="ghost" onclick="toggleToneTest()">🎯 Me tester</button><button class="secondary" onclick="closeTone()">✕</button></div><div id="tone-body"></div></div></div>
 <script>
   const LEX_KEY = "thai_lexicon_db_v4";
   const PHRASES_KEY = "thai_phrases_db_v1";
@@ -729,7 +751,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
         return;
       }
       const color = grammarConfig.CAT_COLORS[w.cat] || '#64748b';
-      box.innerHTML += `<div class="token" style="border-color:${color}"><span class="del" onclick="removeWord(${i})">×</span><span class="role" style="color:${color}">${w.cat}</span><span class="th" style="color:${color}" onclick="showAlternatives(${i})" title="Touche le mot thaï pour voir d'autres mots possibles à cette place">${w.thai}</span><span class="ro">${w.rom}</span><span class="se" onclick="cycleSense(${i})" title="${esc(w.sens)}">${esc(senseText(w))}${glossList(w).length > 1 ? ' <small>' + (w.sp === -1 ? 'tous' : ((w.sp || 0) + 1) + '/' + glossList(w).length) + '</small>' : ''}</span></div>`;
+      box.innerHTML += `<div class="token" style="border-color:${color}"><span class="del" onclick="removeWord(${i})">×</span><span class="role" style="color:${color}">${w.cat}</span><span class="th" style="color:${color}" onclick="showAlternatives(${i})" title="Touche le mot thaï pour voir d'autres mots possibles à cette place">${w.thai}</span><span class="ro">${w.rom}</span><button class="tonebtn" onclick="showTone([{thai:currentPhrase[${i}].thai,rom:currentPhrase[${i}].rom}])" title="Pourquoi ce ton ?">🔊</button><span class="se" onclick="cycleSense(${i})" title="${esc(w.sens)}">${esc(senseText(w))}${glossList(w).length > 1 ? ' <small>' + (w.sp === -1 ? 'tous' : ((w.sp || 0) + 1) + '/' + glossList(w).length) + '</small>' : ''}</span></div>`;
     });
     res.style.display = "block";
     // Découpe la phrase en segments séparés par les coupures __SPACE__ pour un rendu propre.
@@ -858,6 +880,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
         <div class="thai-line">${p.thai}</div>
         <div class="rom-line">${p.rom}</div>
         <div>${esc(phraseSens(p))}</div>
+        ${p.tokens ? `<button class="tonebtn" onclick="toneForSavedPhrase('${p.id}')">🔊 Pourquoi ces tons ?</button>` : ''}
         ${p.note ? `<div class="note">📝 ${p.note}</div>` : ''}
         ${p.avis ? `<div class="avis"><small>🤖 Avis de Claude du ${new Date(p.avisDate || p.date).toLocaleDateString('fr-FR')} · proposé, non validé par le prof <button class="ghost" style="padding:2px 8px; font-size:11px;" onclick="removeAvis('${p.id}')">Retirer</button></small>${esc(p.avis)}</div>` : ''}
         <div style="margin-top:8px;"><button class="claude-btn" style="padding:5px 10px; font-size:12px;" onclick="pasteAvis('${p.id}')">${p.avis ? '🔁 Remplacer' : '📥 Coller'} l'avis de Claude</button></div>
@@ -954,7 +977,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
       .map(w => {
         const color = grammarConfig.CAT_COLORS[w.cat] || '#666';
         const badge = w.type === "collocation" ? '🧩 ' : '';
-        return `<tr><td style="font-weight:bold; color:${color}">${badge}${w.thai}</td><td><span class="badge" style="background:${color}">${w.cat}</span></td><td>${lexCell(w)}</td><td style="white-space:nowrap;"><button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="editWordFromLexicon('${w.id}')">✏️</button> <button class="danger" onclick="deleteWord('${w.id}')">×</button></td></tr>`;
+        return `<tr><td style="font-weight:bold; color:${color}">${badge}${w.thai}</td><td><span class="badge" style="background:${color}">${w.cat}</span></td><td>${lexCell(w)}</td><td style="white-space:nowrap;"><button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="toneForLex('${w.id}')" title="Pourquoi ce ton ?">🔊</button> <button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="editWordFromLexicon('${w.id}')">✏️</button> <button class="danger" onclick="deleteWord('${w.id}')">×</button></td></tr>`;
       });
     tbody.innerHTML = rows.join('');
   }
@@ -1411,8 +1434,9 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     readerSel = i; renderReader();
     const tk = readerTokens[i], box = document.getElementById("reader-detail");
     const head = `<div style="font-size:26px; margin:10px 0 4px;">${esc(tk.t)}</div>`;
-    if (tk.entries && tk.entries.length) { box.innerHTML = head + tk.entries.map(entryHTML).join(""); return; }
-    box.innerHTML = head + `<p style="color:var(--muted); margin-bottom:10px;">Ce mot n'est pas dans ton lexique (ou le découpage l'a coupé). Tu peux demander sa fiche à Claude, en lui donnant la phrase d'où il vient.</p><button class="claude-btn" onclick="askClaudeUnknown(${i})">🤖 Demander ce mot à Claude</button>`;
+    const toneB = `<div style="margin:8px 0;"><button onclick="toneForReader(${i})">🔊 Pourquoi ce ton ?</button> <button class="secondary" onclick="toneForReaderAll()">🔊 Tout le texte</button></div>`;
+    if (tk.entries && tk.entries.length) { box.innerHTML = head + tk.entries.map(entryHTML).join("") + toneB; return; }
+    box.innerHTML = head + `<p style="color:var(--muted); margin-bottom:10px;">Ce mot n'est pas dans ton lexique (ou le découpage l'a coupé). Tu peux demander sa fiche à Claude, en lui donnant la phrase d'où il vient.</p><button class="claude-btn" onclick="askClaudeUnknown(${i})">🤖 Demander ce mot à Claude</button>` + toneB;
   }
   function askClaudeUnknown(i) {
     const w = normThai(readerTokens[i].t);
@@ -1450,6 +1474,377 @@ Réponds en trois parties courtes :
   }
 
   function showToast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
+
+  /* ===== moteur de tons ===== */
+// ===== Moteur de tons thaï : découpe un mot en syllabes, calcule le ton par les règles, l'explique =====
+const ThaiTone = (() => {
+  const MID = "กจดตบปอฎฏ", HIGH = "ขฃฉถฐผฝศษสห", LOW = "คฅฆงชซฌญฑฒณทธนพฟภมยรลวฬฮ";
+  const cls = c => MID.includes(c) ? "moy" : HIGH.includes(c) ? "hte" : LOW.includes(c) ? "bas" : null;
+  const isC = c => !!c && c >= "ก" && c <= "ฮ";
+  const FIN = {};
+  const setFin = (k, str) => { for (const c of str) FIN[c] = k; };
+  setFin("k", "กขฃคฅฆ"); setFin("t", "จฉชซฌฎฏฐฑฒดตถทธศษส"); setFin("p", "บปพฟภ");
+  setFin("n", "ญณนรลฬ"); setFin("m", "ม"); setFin("ng", "ง"); setFin("y", "ย"); setFin("w", "ว");
+  const DEAD = { k: 1, t: 1, p: 1 };
+  const UP = "ัิีึืุู็", TONE = "่้๊๋", LEAD = "เแโใไ", POSTV = "ะาำ";
+  const vowelish = c => !!c && (UP.includes(c) || TONE.includes(c) || POSTV.includes(c));
+  const HONAM = "งญนมยรลว";
+  const SON = "งญนมยรลว";
+  const LEADERS = "กจดตบปฎฏขฃฉถฐผฝศษสอ";
+  const CLUSTER = new Set("กร กล กว ขร ขล ขว คร คล คว ตร ปร ปล พร พล ผล ฟร ฟล บร บล ดร".split(" "));
+  const SILENT_R = new Set("ทร จร ศร สร ซร".split(" "));
+  const AO = ["อย่า", "อยู่", "อยาก", "อย่าง"];
+  const NAMES = { "ก": "กอ ไก่", "ข": "ขอ ไข่", "ฃ": "ขอ ขวด", "ค": "คอ ควาย", "ฅ": "คอ คน", "ฆ": "คอ ระฆัง", "ง": "งอ งู", "จ": "จอ จาน", "ฉ": "ฉอ ฉิ่ง", "ช": "ชอ ช้าง", "ซ": "ซอ โซ่", "ฌ": "ชอ เฌอ", "ญ": "ยอ หญิง", "ฎ": "ดอ ชฎา", "ฏ": "ตอ ปฏัก", "ฐ": "ถอ ฐาน", "ฑ": "ทอ มณโฑ", "ฒ": "ทอ ผู้เฒ่า", "ณ": "นอ เณร", "ด": "ดอ เด็ก", "ต": "ตอ เต่า", "ถ": "ถอ ถุง", "ท": "ทอ ทหาร", "ธ": "ทอ ธง", "น": "นอ หนู", "บ": "บอ ใบไม้", "ป": "ปอ ปลา", "ผ": "ผอ ผึ้ง", "ฝ": "ฝอ ฝา", "พ": "พอ พาน", "ฟ": "ฟอ ฟัน", "ภ": "พอ สำเภา", "ม": "มอ ม้า", "ย": "ยอ ยักษ์", "ร": "รอ เรือ", "ล": "ลอ ลิง", "ว": "วอ แหวน", "ศ": "สอ ศาลา", "ษ": "สอ ฤๅษี", "ส": "สอ เสือ", "ห": "หอ หีบ", "ฬ": "ลอ จุฬา", "อ": "ออ อ่าง", "ฮ": "ฮอ นกฮูก" };
+
+  // --- nettoyage : ์ (muet), รร, ๆ ฯ ---
+  function expandRepeat(word) {
+    const toks = (word || "").split(/\s+/).filter(Boolean), out = [];
+    for (const t of toks) {
+      if (t === "ๆ") { if (out.length) out.push(out[out.length - 1]); continue; }
+      if (t.includes("ๆ")) { const b = t.slice(0, t.indexOf("ๆ")); out.push(b, b); const rest = t.slice(t.indexOf("ๆ") + 1); if (rest) out.push(rest); continue; }
+      out.push(t);
+    }
+    return out.join("");
+  }
+  function clean(word) {
+    let s = expandRepeat(word).normalize("NFC").replace(/ํา/g, "ำ").replace(/[ๆฯ\s]/g, "");
+    s = s.replace(/[^\u0E00-\u0E7F]/g, "");
+    let a = Array.from(s), out = [];
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] === "์") {
+        // supprime la consonne muette (et sa voyelle) qui précède
+        if (out.length && "ิีึืุู".includes(out[out.length - 1])) out.pop();
+        if (out.length && isC(out[out.length - 1])) {
+          const c = out.pop();
+          if (c === "ร" && out.length >= 2 && "ทตศษส".includes(out[out.length - 1]) && isC(out[out.length - 2])) out.pop();
+        }
+        continue;
+      }
+      out.push(a[i]);
+    }
+    s = out.join("");
+    // รร : -รร + finale = ั ; sinon = ัน
+    s = s.replace(/รร([ก-ฮ])/g, "ั$1").replace(/รร/g, "ัน");
+    s = s.replace(/([ตกท])ร$/, "$1");
+    return s;
+  }
+
+  // --- options d'initiale à la position j ---
+  function initials(s, j, lead) {
+    const c1 = s[j], c2 = s[j + 1], res = [];
+    res.push({ len: 1, chars: c1, eff: cls(c1), kind: "simple", pen: 0 });
+    if (c1 === "ห" && c2 && HONAM.includes(c2)) res.push({ len: 2, chars: c1 + c2, eff: "hte", kind: "honam", pen: -1 });
+    if (c1 === "อ" && c2 === "ย") { const rest = s.slice(j); if (AO.some(w => rest.startsWith(w))) res.push({ len: 2, chars: "อย", eff: "moy", kind: "aonam", pen: -1 }); }
+    if (c2) {
+      const pair = c1 + c2, nx = s[j + 2];
+      const vow = vowelish(nx);
+      if (CLUSTER.has(pair)) {
+        const ok = c2 === "ว" ? vow : (vow || !!lead || isC(nx) || !nx);
+        if (ok) res.push({ len: 2, chars: pair, eff: cls(c1), kind: "cluster", pen: -1 });
+      }
+      if (SILENT_R.has(pair) && (vow || !!lead || isC(nx) || !nx)) res.push({ len: 2, chars: pair, eff: cls(c1), kind: "rmuet", pen: -1 });
+    }
+    return res;
+  }
+
+  const RARE_FIN = "ซศษสฉชฌฑฒธภฟฆฅฃฐผ";
+  const finalOK = (s, q) => isC(s[q]) && FIN[s[q]] && !vowelish(s[q + 1]);
+  const finPen = c => (c && RARE_FIN.includes(c)) ? 0.8 : 0;
+
+  // --- options "reste de syllabe" après l'initiale ---
+  function rests(s, k, lead) {
+    const out = [];
+    let p = k, up = null, mark = null;
+    if (UP.includes(s[p])) { up = s[p]; p++; }
+    if (TONE.includes(s[p])) { mark = s[p]; p++; }
+    const push = (v, end, fin, pen) => out.push({ v, up, mark, end, fin: fin || null, pen: (pen || 0) + finPen(fin) + ((v.inherent && !fin && end >= s.length) ? 8 : 0) });
+    const withFinal = (v, end, optional, pen) => {
+      if (optional) push(v, end, null, pen);
+      if (finalOK(s, end)) push(v, end + 1, s[end], pen);
+    };
+    const nx = s[p];
+    if (!lead) {
+      if (!up) {
+        if (nx === "ะ") push({ long: false, g: "ะ" }, p + 1);
+        else if (nx === "า") withFinal({ long: true, g: "า" }, p + 1, true);
+        else if (nx === "ำ") push({ long: false, g: "ำ", live: true }, p + 1);
+        else {
+          if (nx === "อ") withFinal({ long: true, g: "อ" }, p + 1, true);
+          if (nx === "ว" && !vowelish(s[p + 1]) && !(mark && false)) withFinal({ long: true, g: "ัว (-ว-)" }, p + 1, true);
+          if (finalOK(s, p)) push({ long: false, g: "∅ (o)", inherent: true }, p + 1, s[p], 0);
+          push({ long: false, g: "∅ (a)", inherent: true }, p, null, (SON.includes(s[p]) && LEADERS.includes(s[k - 1])) ? 0.3 : 1.5);
+        }
+      } else if (up === "ั") {
+        if (nx === "ว" && !vowelish(s[p + 1])) { if (s[p + 1] === "ะ") push({ long: false, g: "ัวะ" }, p + 2); else push({ long: true, g: "ัว" }, p + 1); }
+        else if (finalOK(s, p)) push({ long: false, g: "ั" }, p + 1, s[p]);
+      } else if (up === "ิ") withFinal({ long: false, g: "ิ" }, p, true);
+      else if (up === "ี") withFinal({ long: true, g: "ี" }, p, true);
+      else if (up === "ึ") withFinal({ long: false, g: "ึ" }, p, true);
+      else if (up === "ื") { if (nx === "อ") push({ long: true, g: "ือ" }, p + 1); else withFinal({ long: true, g: "ื" }, p, true); }
+      else if (up === "ุ") withFinal({ long: false, g: "ุ" }, p, true);
+      else if (up === "ู") withFinal({ long: true, g: "ู" }, p, true);
+      else if (up === "็") { if (nx === "อ") withFinal({ long: false, g: "็อ" }, p + 1, true); else push({ long: false, g: "็", exc: "ก็" }, p); }
+    } else if (lead === "เ") {
+      if (up === "ี" && nx === "ย") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-ียะ" }, p + 2); else withFinal({ long: true, g: "เ-ีย" }, p + 1, true); }
+      else if (up === "ื" && nx === "อ") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-ือะ" }, p + 2); else withFinal({ long: true, g: "เ-ือ" }, p + 1, true); }
+      else if (up === "ิ") withFinal({ long: true, g: "เ-ิ-" }, p, true);
+      else if (up === "็") { if (finalOK(s, p)) push({ long: false, g: "เ-็-" }, p + 1, s[p]); }
+      else if (!up) {
+        if (nx === "ะ") push({ long: false, g: "เ-ะ" }, p + 1);
+        else if (nx === "า") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-าะ" }, p + 2); else push({ long: false, g: "เ-า", live: true }, p + 1); }
+        else if (nx === "อ") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-อะ" }, p + 2); else withFinal({ long: true, g: "เ-อ" }, p + 1, true); }
+        else withFinal({ long: true, g: "เ-" }, p, true);
+      }
+    } else if (lead === "แ") {
+      if (up === "็") { if (finalOK(s, p)) push({ long: false, g: "แ-็-" }, p + 1, s[p]); }
+      else if (!up) { if (nx === "ะ") push({ long: false, g: "แ-ะ" }, p + 1); else withFinal({ long: true, g: "แ-" }, p, true); }
+    } else if (lead === "โ") {
+      if (!up) { if (nx === "ะ") push({ long: false, g: "โ-ะ" }, p + 1); else withFinal({ long: true, g: "โ-" }, p, true); }
+    } else if (lead === "ไ" || lead === "ใ") {
+      if (!up) withFinal({ long: false, g: lead + "-", live: true }, p, true);
+    }
+    return out;
+  }
+
+  function parseAt(s, i) {
+    const res = [];
+    let j = i, lead = null;
+    if (LEAD.includes(s[j])) { lead = s[j]; j++; }
+    if (!isC(s[j])) return res;
+    for (const ini of initials(s, j, lead)) {
+      for (const r of rests(s, j + ini.len, lead)) {
+        const base = { start: i, end: r.end, lead, ini, v: r.v, up: r.up, mark: r.mark, fin: r.fin, cost: 1 + ini.pen + r.pen };
+        res.push(base);
+        if (r.fin && r.end < s.length && !lead && r.v.g !== "∅ (o)") res.push({ ...base, link: true, cost: base.cost + 2.5 });
+      }
+    }
+    return res;
+  }
+
+  // --- segmentation optimale (guidée par le nombre de syllabes attendu) ---
+  function segment(s, expected) {
+    const n = s.length, memo = new Map();
+    const cache = new Map();
+    const opts = i => { if (!cache.has(i)) cache.set(i, parseAt(s, i)); return cache.get(i); };
+    function solve(i, r) {
+      if (i === n) return r === 0 || r === null ? { cost: 0, syls: [] } : null;
+      if (r !== null && r <= 0) return null;
+      const key = i + "," + r;
+      if (memo.has(key)) return memo.get(key);
+      let best = null;
+      for (const o of opts(i)) {
+        const w = o.link ? 2 : 1;
+        if (r !== null && r < w) continue;
+        const rest = solve(o.end, r === null ? null : r - w);
+        if (!rest) continue;
+        const c = o.cost + rest.cost;
+        if (!best || c < best.cost) best = { cost: c, syls: [o].concat(rest.syls) };
+      }
+      memo.set(key, best);
+      return best;
+    }
+    const free = solve(0, null);
+    let sol = expected ? solve(0, expected) : null, guided = !!sol;
+    if (sol && free && sol.cost - free.cost > 4) { sol = free; guided = false; }
+    if (!sol) { sol = free; guided = false; }
+    return sol ? { syls: sol.syls, guided, cost: sol.cost } : null;
+  }
+
+  // --- ton ---
+  const T = { mid: "moyen", low: "bas", fall: "descendant", high: "haut", rise: "montant" };
+  const MARKS = { "่": "ไม้เอก ่", "้": "ไม้โท ้", "๊": "ไม้ตรี ๊", "๋": "ไม้จัตวา ๋" };
+  const CLASS_FR = { moy: "moyenne", hte: "haute", bas: "basse" };
+
+  function analyzeSyl(sy, s) {
+    const text = sy.linked ? sy.ini.chars : s.slice(sy.start, sy.end);
+    const fk = sy.fin ? FIN[sy.fin] : null;
+    const live = !!sy.v.live || (fk && !DEAD[fk]) || (sy.v.long && !sy.fin) || (sy.fin && !DEAD[fk]);
+    const type = live ? "vivante" : (sy.v.long ? "morte longue" : "morte courte");
+    const eff = sy.ini.eff, mark = sy.mark;
+    let tone, rule, invisible = null;
+    if (sy.v.exc === "ก็") { tone = "fall"; rule = "Mot-outil à retenir : ก็ se lit avec un ton descendant, même si la règle donnerait un ton bas."; }
+    else if (mark) {
+      const m = MARKS[mark];
+      if (mark === "๊" || mark === "๋") {
+        tone = mark === "๊" ? "high" : "rise";
+        rule = `${m} = ton ${T[tone]}` + (eff === "moy" ? " (ce signe ne s'écrit que sur la classe moyenne)." : " — signe inhabituel sur cette classe, à vérifier.");
+      } else if (mark === "่") { tone = eff === "bas" ? "fall" : "low"; rule = `Classe ${CLASS_FR[eff]} + ${m} = ton ${T[tone]}.`; }
+      else { tone = eff === "bas" ? "high" : "fall"; rule = `Classe ${CLASS_FR[eff]} + ${m} = ton ${T[tone]}` + (eff === "bas" ? " (piège classique : comme dans น้ำ)." : "."); }
+    } else if (live) {
+      tone = eff === "hte" ? "rise" : "mid";
+      rule = eff === "hte" ? "Classe haute + syllabe vivante sans signe = ton montant." : `Classe ${CLASS_FR[eff]} + syllabe vivante sans signe = ton moyen.`;
+    } else if (eff === "bas") {
+      if (sy.v.long) { tone = "fall"; rule = "Classe basse + syllabe morte longue sans signe = ton descendant."; invisible = "อ่ (ไม้เอก)"; }
+      else { tone = "high"; rule = "Classe basse + syllabe morte courte sans signe = ton haut."; invisible = "อ้ (ไม้โท)"; }
+    } else { tone = "low"; rule = `Classe ${CLASS_FR[eff]} + syllabe morte sans signe = ton bas.`; invisible = "อ่ (ไม้เอก)"; }
+    return { text, linked: !!sy.linked, repeated: !!sy.repeated, tone, type, rule, invisible, eff, ini: sy.ini, lead: sy.lead, vowel: sy.v, fin: sy.fin, fk, mark, live };
+  }
+
+  // --- rom : tons lus dans la romanisation (diacritiques) ---
+  function romSyllables(rom) {
+    return (rom || "").split(/[\s\-·]+/).map(x => x.replace(/[(),.;:!?]/g, "")).filter(x => /\p{L}/u.test(x));
+  }
+  function romTone(syl) {
+    const d = syl.normalize("NFD");
+    if (/̀/.test(d)) return "low";
+    if (/̂/.test(d)) return "fall";
+    if (/́/.test(d)) return "high";
+    if (/̌/.test(d)) return "rise";
+    return "mid";
+  }
+
+  const ORTHO = { "เหตุ": "เหต", "สามารถ": "สามาด" };
+
+  function expandLinks(list) {
+    const out = [];
+    list.forEach(o => {
+      out.push(o);
+      if (o.link) out.push({ start: o.end, end: o.end, lead: null, ini: { len: 0, chars: o.fin, eff: cls(o.fin), kind: "lien", pen: 0 }, v: { long: false, g: "∅ (a)", inherent: true }, up: null, mark: null, fin: null, linked: true, cost: 0 });
+    });
+    return out;
+  }
+
+  function finish(sylsRaw, s, romSyl) {
+    const raw = expandLinks(sylsRaw);
+    raw.forEach((x, i) => {
+      const nx = raw[i + 1];
+      if (!nx || x.linked || x.v.g !== "∅ (a)" || x.ini.kind !== "simple" || !LEADERS.includes(x.ini.chars)) return;
+      if (nx.ini.kind !== "simple" || !SON.includes(nx.ini.chars)) return;
+      const lead = { ...nx.ini, eff: cls(x.ini.chars), kind: "aksonnam", leader: x.ini.chars };
+      let useLeader = x.ini.chars !== "อ";
+      if (romSyl && romSyl.length === raw.length) {
+        const tL = analyzeSyl({ ...nx, ini: lead }, s).tone, tN = analyzeSyl(nx, s).tone, rt = romTone(romSyl[i + 1]);
+        if (tL !== tN) useLeader = (rt === tL) ? true : (rt === tN ? false : useLeader);
+      }
+      if (useLeader) nx.ini = lead;
+    });
+    return raw.map(x => analyzeSyl(x, s));
+  }
+
+  function analyze(thai, rom) {
+    let src = thai || "";
+    Object.keys(ORTHO).forEach(k => { src = src.split(k).join(ORTHO[k]); });
+    const romSyl = romSyllables(rom);
+    const expected = romSyl.length || null;
+    let seg, s;
+    if (src.includes("ๆ")) {
+      const cut = clean(src.slice(0, src.indexOf("ๆ"))).length;
+      s = clean(src.replace(/ๆ/g, ""));
+      let found = null;
+      for (let k = 1; k <= 3 && !found; k++) {
+        const sg = segment(s, expected ? expected - k : null);
+        if (!sg || (expected && !sg.guided)) continue;
+        const idx = sg.syls.findIndex(o => o.end === cut);
+        if (idx >= k - 1) found = { sg, idx, k };
+      }
+      if (!found) { const sg = segment(s, null); const idx = sg ? sg.syls.findIndex(o => o.end === cut) : -1; if (idx >= 0) found = { sg, idx, k: 1 }; }
+      if (!found) return { thai, ok: false, reason: "Découpage impossible." };
+      const a = found.sg.syls.slice(0, found.idx + 1), rp = a.slice(a.length - found.k);
+      seg = { ...found.sg, syls: a.concat(rp.map(o => ({ ...o, repeated: true })), found.sg.syls.slice(found.idx + 1)) };
+    } else {
+      s = clean(src);
+      if (!s) return null;
+      seg = segment(s, expected);
+    }
+    if (!seg) return { thai, ok: false, reason: "Découpage impossible (mot rare, emprunt ou forme non prévue)." };
+    const syls = finish(seg.syls, s, romSyl);
+    const res = { thai, cleaned: s, ok: true, syls, guided: seg.guided, expected, romSyl };
+    if (romSyl.length) {
+      res.countMatch = romSyl.length === syls.length;
+      if (res.countMatch) {
+        syls.forEach((sy, i) => { sy.romSyl = romSyl[i]; sy.romTone = romTone(romSyl[i]); sy.match = sy.romTone === sy.tone; });
+        res.match = syls.every(x => x.match);
+      } else res.match = false;
+    }
+    return res;
+  }
+
+  return { analyze, clean, romSyllables, romTone, cls, NAMES, T, CLASS_FR, MARKS, FIN };
+})();
+
+  /* ===== v11 : Pourquoi ce ton ? ===== */
+  const TONE_COL = { mid: "#94a3b8", low: "#60a5fa", fall: "#f87171", high: "#fbbf24", rise: "#34d399" };
+  const TONE_EX = { mid: "a", low: "à", fall: "â", high: "á", rise: "ǎ" };
+  let toneItems = [], toneTest = false, toneAnswered = {};
+  function iniText(sy) {
+    const i = sy.ini, N = ThaiTone.NAMES, c = ThaiTone.CLASS_FR[sy.eff];
+    if (i.kind === "honam") return `<b>${i.chars}</b> : ห นำ. Le ห ne se prononce pas, il donne sa classe <b>haute</b> à ${i.chars[1]} (${N[i.chars[1]]}).`;
+    if (i.kind === "aonam") return `<b>อย</b> : อ นำ. Le อ ne se prononce pas, il donne sa classe <b>moyenne</b> à ย (cas : อย่า, อยู่, อยาก, อย่าง).`;
+    if (i.kind === "aksonnam") return `<b>${i.chars}</b> (${N[i.chars]}) prend la classe <b>${c}</b> de la consonne meneuse <b>${i.leader}</b> (${N[i.leader]}), écrite sans voyelle devant elle.`;
+    if (i.kind === "cluster") return `Groupe <b>${i.chars}</b> : la première lettre (${N[i.chars[0]]}) donne la classe <b>${c}</b>.`;
+    if (i.kind === "rmuet") return `<b>${i.chars}</b> : le ร ne se prononce pas ; la classe vient de ${i.chars[0]} : <b>${c}</b>.`;
+    if (i.kind === "lien") return `Syllabe de liaison (a bref) devant <b>${i.chars}</b> : mot savant, la consonne finale sert aussi d'initiale (classe ${c}).`;
+    return `<b>${i.chars}</b> (${N[i.chars]}) : classe <b>${c}</b>.`;
+  }
+  function sylCardHTML(sy, wi, si) {
+    const key = wi + "_" + si, test = toneTest && !toneAnswered[key];
+    const vow = sy.linked ? "a bref implicite" : (sy.vowel.long ? "voyelle longue" : "voyelle brève") + (sy.vowel.g ? " (" + sy.vowel.g + ")" : "");
+    const fin = sy.fin ? `finale <b>${sy.fin}</b> (son -${sy.fk})` : "pas de finale";
+    const mk = sy.mark ? `signe <b>${ThaiTone.MARKS[sy.mark]}</b>` : (sy.invisible ? `aucun signe écrit (marque invisible : <b>${sy.invisible}</b>)` : "aucun signe");
+    const col = TONE_COL[sy.tone];
+    const head = `<div class="tsy-h"><span class="tsy-th">${esc(sy.text)}${sy.repeated ? " <small>(répété ๆ)</small>" : ""}</span>${sy.romSyl ? `<span class="tsy-ro">${esc(sy.romSyl)}</span>` : ""}</div>`;
+    let res;
+    if (test) {
+      res = `<div class="tsy-q">Quel ton ? ` + ["mid", "low", "fall", "high", "rise"].map(t => `<button class="tbtn" style="border-color:${TONE_COL[t]}" onclick="toneGuess('${key}','${t}','${sy.tone}')">${TONE_EX[t]}</button>`).join("") + `</div>`;
+    } else {
+      const g = toneAnswered[key];
+      const verdict = (g ? `<div class="tsy-g">${g.ok ? "✅ Bien vu !" : "❌ Tu avais choisi " + ThaiTone.T[g.t] + "."}</div>` : "") + (sy.romSyl ? (sy.match ? `<span class="tchk ok">✓ cohérent avec la romanisation du lexique</span>` : `<span class="tchk ko">⚠️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} : à vérifier (exception du mot, mot savant, ou à corriger dans le lexique)</span>`) : "");
+      res = `${g ? "" : ""}<div class="tsy-t" style="color:${col}">→ ton <b>${ThaiTone.T[sy.tone]}</b> (${TONE_EX[sy.tone]})</div>${verdict}<div class="tsy-rule">${esc(sy.rule)}</div>`;
+    }
+    if (test) return `<div class="tsy" style="border-color:var(--border)">${head}${res}</div>`;
+    return `<div class="tsy" style="border-color:${col}">${head}<ul><li>${iniText(sy)}</li><li>${vow} · ${fin} → syllabe <b>${sy.type}</b></li><li>${mk}</li></ul>${res}</div>`;
+  }
+  function toneWordHTML(it, wi) {
+    const r = it.res;
+    if (!r || !r.ok) return `<div class="tword"><div class="tw-h">${esc(it.thai)}</div><p class="tmuted">${esc(r && r.reason || "Rien à analyser.")}</p></div>`;
+    let warn = "";
+    if (r.romSyl && r.romSyl.length && !r.countMatch) warn = `<p class="tchk ko">⚠️ Mon découpage donne ${r.syls.length} syllabes, ta romanisation en a ${r.romSyl.length} : comparaison impossible, vérifie le découpage.</p>`;
+    const strip = r.syls.map(s => `<span class="tchip" style="background:${TONE_COL[s.tone]}">${esc(s.text)} ${TONE_EX[s.tone]}</span>`).join("");
+    return `<div class="tword"><div class="tw-h">${esc(it.thai)} <span class="tmuted">${esc(it.rom || "")}</span></div>${toneTest ? "" : `<div class="tstrip">${strip}</div>`}${warn}${r.syls.map((s, si) => sylCardHTML(s, wi, si)).join("")}</div>`;
+  }
+  function renderToneModal() {
+    document.getElementById("tone-body").innerHTML = toneItems.map(toneWordHTML).join("") || "<p>Rien à analyser.</p>";
+    document.getElementById("tone-test").classList.toggle("on", toneTest);
+  }
+  function showTone(items) {
+    toneItems = items.filter(x => x && x.thai).map(x => ({ thai: x.thai, rom: x.rom || "", res: ThaiTone.analyze(x.thai, x.rom || "") })).filter(x => x.res);
+    if (!toneItems.length) { showToast("Aucun mot thaï à analyser."); return; }
+    toneAnswered = {};
+    document.getElementById("tone-modal").style.display = "flex";
+    renderToneModal();
+  }
+  function closeTone() { document.getElementById("tone-modal").style.display = "none"; }
+  function toggleToneTest() { toneTest = !toneTest; toneAnswered = {}; renderToneModal(); }
+  function toneGuess(key, t, good) { toneAnswered[key] = { t, ok: t === good }; renderToneModal(); }
+  function toneForLex(id) { const w = lexicon.find(x => x.id === id); if (w) showTone([{ thai: w.thai, rom: w.rom }]); }
+  function toneForPhrase() {
+    showTone(currentPhrase.filter(w => w.cat !== "__SPACE__").map(w => ({ thai: w.thai, rom: w.rom })));
+  }
+  function toneForSavedPhrase(id) {
+    const p = savedPhrases.find(x => x.id === id); if (!p || !p.tokens) return;
+    showTone(p.tokens.filter(w => w.cat !== "__SPACE__").map(w => ({ thai: w.thai, rom: w.rom })));
+  }
+  function toneForReader(i) {
+    const tk = readerTokens[i];
+    const e = tk.entries && tk.entries[0];
+    showTone([{ thai: tk.t, rom: e ? e.rom : "" }]);
+  }
+  function toneForReaderAll() {
+    const items = readerTokens.filter(t => !t.plain && /[฀-๿]/.test(t.t)).slice(0, 40).map(t => ({ thai: t.t, rom: t.entries && t.entries[0] ? t.entries[0].rom : "" }));
+    showTone(items);
+  }
+  function toneReport() {
+    const box = document.getElementById("tone-report");
+    let n = 0, ok = 0, cnt = 0, bad = 0, fail = 0; const list = [];
+    lexicon.forEach(w => {
+      if (!w.rom || !/[฀-๿]/.test(w.thai)) return;
+      const r = ThaiTone.analyze(w.thai, w.rom); n++;
+      if (!r || !r.ok) { fail++; list.push({ w, why: "découpage impossible" }); return; }
+      if (r.match) ok++; else if (!r.countMatch) { cnt++; list.push({ w, why: `${r.syls.length} syllabes trouvées / ${r.romSyl.length} dans la romanisation` }); }
+      else { bad++; list.push({ w, why: r.syls.filter(s => !s.match).map(s => `${s.text} : moteur ${ThaiTone.T[s.tone]}, lexique ${ThaiTone.T[s.romTone]}`).join(" ; ") }); }
+    });
+    box.innerHTML = `<p><b>${n ? Math.round(1000 * ok / n) / 10 : 0} %</b> des entrées sont cohérentes (${ok} sur ${n}). Divergences de ton : ${bad} · découpage différent : ${cnt} · non analysables : ${fail}.</p><p class="tmuted">Une divergence n'est pas forcément une erreur : mots savants, exceptions et emprunts ne suivent pas toujours la règle. Mais elle peut révéler une faute de romanisation dans ton lexique. Touche un mot pour voir l'explication.</p><div style="max-height:340px; overflow:auto;">` + list.map(x => `<div class="trow" onclick="toneForLex('${x.w.id}')"><b>${esc(x.w.thai)}</b> <span class="tmuted">${esc(x.w.rom)}</span><br><small>${esc(x.why)}</small></div>`).join("") + `</div>`;
+  }
 
   window.onload = async () => {
     await loadLexiconFromDB();
