@@ -266,6 +266,7 @@
       <button class="secondary" onclick="exportGrammar()">Exporter les règles de grammaire</button>
       <button class="secondary" onclick="exportAllRecurrences()">Exporter les récurrences détectées</button>
       <button onclick="exportAll()">📦 Exporter tout (un seul fichier)</button>
+      <button onclick="shareAll()">📤 Partager (téléphone)</button>
     </div>
   </div>
 
@@ -1209,11 +1210,23 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
   function exportPhrases() { downloadJSON(savedPhrases, "phrases_" + dateStamp() + ".js"); }
   function exportGrammar() { downloadJSON(grammarConfig, "grammaire.js"); }
 
+  // Téléchargement par Blob (les gros fichiers échouaient avec une adresse data: sur téléphone)
   function downloadJSON(data, filename) {
-    const a = document.createElement('a');
-    a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-    a.download = filename;
-    a.click();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 4000);
+  }
+  // Partage (téléphone) : envoie le fichier vers Drive, e-mail, WhatsApp, etc. sans passer par le téléchargement
+  async function shareAll() {
+    const data = { version: 1, exportedAt: new Date().toISOString(), lexique: lexicon, phrases: savedPhrases, grammaire: grammarConfig, profil: getProfileText() };
+    const file = new File([JSON.stringify(data, null, 2)], "thai_tout_" + dateStamp() + ".json", { type: "application/json" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Mon lexique thaï" }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    alert("Le partage de fichier n'est pas disponible sur ce navigateur. Utilise « Exporter tout (un seul fichier) ».");
   }
 
   function dateStamp() { return new Date().toISOString().slice(0, 10); }
