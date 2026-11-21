@@ -98,7 +98,7 @@
   .tstrip { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; } .tchip { color:#000; font-weight:bold; border-radius:14px; padding:3px 10px; font-size:16px; }
   .tsy { border-left:5px solid; background:var(--card); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:14px; line-height:1.45; }
   .tsy ul { margin:4px 0 4px 18px; } .tsy-h { display:flex; gap:10px; align-items:baseline; } .tsy-th { font-size:22px; font-weight:bold; } .tsy-ro { color:var(--muted); }
-  .tsy-t { font-size:16px; margin-top:4px; } .tsy-rule { color:var(--muted); font-size:13px; margin-top:2px; }
+  .tsy-t { font-size:16px; margin-top:4px; } .tsy-form { margin-top:4px; padding:4px 8px; border-radius:6px; background:rgba(148,163,184,.14); font-size:14px; } .tsy-rule { color:var(--muted); font-size:13px; margin-top:2px; }
   .tchk { display:inline-block; font-size:12px; border-radius:6px; padding:2px 6px; margin-top:4px; } .tchk.ok { background:rgba(16,185,129,.18); color:#34d399; } .tchk.ex { background:rgba(148,163,184,.18); color:#cbd5e1; } .tchk.ko { background:rgba(245,158,11,.18); color:#fbbf24; }
   .tbtn { background:var(--bg); color:var(--text); border:2px solid; padding:6px 12px; margin:0 3px; font-size:16px; } .tsy-q { margin-top:6px; }
   .trow { padding:6px 4px; border-bottom:1px solid var(--border); cursor:pointer; } .tonebtn { background:transparent; border:1px solid var(--border); color:var(--accent); padding:3px 7px; font-size:12px; border-radius:6px; }
@@ -1705,7 +1705,10 @@ const ThaiTone = (() => {
       if (sy.v.long) { tone = "fall"; rule = "Classe basse + syllabe morte longue sans signe = ton descendant."; invisible = "อ่ (ไม้เอก)"; }
       else { tone = "high"; rule = "Classe basse + syllabe morte courte sans signe = ton haut."; invisible = "อ้ (ไม้โท)"; }
     } else { tone = "low"; rule = `Classe ${CLASS_FR[eff]} + syllabe morte sans signe = ton bas.`; invisible = "อ่ (ไม้เอก)"; }
-    return { text, linked: !!sy.linked, repeated: !!sy.repeated, tone, type, rule, invisible, eff, ini: sy.ini, lead: sy.lead, vowel: sy.v, fin: sy.fin, fk, mark, live };
+    const MN = { "่": "ไม้เอก (่)", "้": "ไม้โท (้)", "๊": "ไม้ตรี (๊)", "๋": "ไม้จัตวา (๋)" };
+    const state = mark ? MN[mark] : (live ? "vivante" : (eff === "bas" ? type : "morte"));
+    const formula = sy.v.exc === "ก็" ? "ก็ = descendant (exception)" : `${CLASS_FR[eff]} + ${state} = ${T[tone]}`;
+    return { text, formula, linked: !!sy.linked, repeated: !!sy.repeated, tone, type, rule, invisible, eff, ini: sy.ini, lead: sy.lead, vowel: sy.v, fin: sy.fin, fk, mark, live };
   }
 
   // --- rom : tons lus dans la romanisation (diacritiques) ---
@@ -1833,7 +1836,7 @@ const ThaiTone = (() => {
     } else {
       const g = toneAnswered[key];
       const verdict = (g ? `<div class="tsy-g">${g.ok ? "✅ Bien vu !" : "❌ Tu avais choisi " + ThaiTone.T[g.t] + "."}</div>` : "") + (sy.romSyl ? (sy.match ? `<span class="tchk ok">✓ cohérent avec la romanisation du lexique</span>` : toneItems[wi] && toneItems[wi].res.exception ? `<span class="tchk ex">ℹ️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} (mot irrégulier)</span>` : `<span class="tchk ko">⚠️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} : à vérifier (exception du mot, mot savant, ou à corriger dans le lexique)</span>`) : "");
-      res = `${g ? "" : ""}<div class="tsy-t" style="color:${col}">→ ton <b>${ThaiTone.T[sy.tone]}</b> (${TONE_EX[sy.tone]})</div>${verdict}<div class="tsy-rule">${esc(sy.rule)}</div>`;
+      res = `${g ? "" : ""}<div class="tsy-t" style="color:${col}">→ ton <b>${ThaiTone.T[sy.tone]}</b> (${TONE_EX[sy.tone]})</div>${verdict}<div class="tsy-rule">${esc(sy.rule)}</div><div class="tsy-form">🎓 Formule : <b>${esc(sy.formula)}</b></div>`;
     }
     if (test) return `<div class="tsy" style="border-color:var(--border)">${head}${res}</div>`;
     return `<div class="tsy" style="border-color:${col}">${head}<ul><li>${iniText(sy)}</li><li>${vow} · ${fin} → syllabe <b>${sy.type}</b></li><li>${mk}</li></ul>${res}</div>`;
