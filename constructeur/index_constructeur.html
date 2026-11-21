@@ -99,7 +99,7 @@
   .tsy { border-left:5px solid; background:var(--card); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:14px; line-height:1.45; }
   .tsy ul { margin:4px 0 4px 18px; } .tsy-h { display:flex; gap:10px; align-items:baseline; } .tsy-th { font-size:22px; font-weight:bold; } .tsy-ro { color:var(--muted); }
   .tsy-t { font-size:16px; margin-top:4px; } .tsy-rule { color:var(--muted); font-size:13px; margin-top:2px; }
-  .tchk { display:inline-block; font-size:12px; border-radius:6px; padding:2px 6px; margin-top:4px; } .tchk.ok { background:rgba(16,185,129,.18); color:#34d399; } .tchk.ko { background:rgba(245,158,11,.18); color:#fbbf24; }
+  .tchk { display:inline-block; font-size:12px; border-radius:6px; padding:2px 6px; margin-top:4px; } .tchk.ok { background:rgba(16,185,129,.18); color:#34d399; } .tchk.ex { background:rgba(148,163,184,.18); color:#cbd5e1; } .tchk.ko { background:rgba(245,158,11,.18); color:#fbbf24; }
   .tbtn { background:var(--bg); color:var(--text); border:2px solid; padding:6px 12px; margin:0 3px; font-size:16px; } .tsy-q { margin-top:6px; }
   .trow { padding:6px 4px; border-bottom:1px solid var(--border); cursor:pointer; } .tonebtn { background:transparent; border:1px solid var(--border); color:var(--accent); padding:3px 7px; font-size:12px; border-radius:6px; }
   #tone-test.on { background:var(--accent); color:#000; }
@@ -1476,6 +1476,7 @@ Réponds en trois parties courtes :
   function showToast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
 
   /* ===== moteur de tons ===== */
+
 // ===== Moteur de tons thaï : découpe un mot en syllabes, calcule le ton par les règles, l'explique =====
 const ThaiTone = (() => {
   const MID = "กจดตบปอฎฏ", HIGH = "ขฃฉถฐผฝศษสห", LOW = "คฅฆงชซฌญฑฒณทธนพฟภมยรลวฬฮ";
@@ -1540,7 +1541,7 @@ const ThaiTone = (() => {
       const vow = vowelish(nx);
       if (CLUSTER.has(pair)) {
         const ok = c2 === "ว" ? vow : (vow || !!lead || isC(nx) || !nx);
-        if (ok) res.push({ len: 2, chars: pair, eff: cls(c1), kind: "cluster", pen: -1 });
+        if (ok) res.push({ len: 2, chars: pair, eff: cls(c1), kind: "cluster", pen: 0.5 });
       }
       if (SILENT_R.has(pair) && (vow || !!lead || isC(nx) || !nx)) res.push({ len: 2, chars: pair, eff: cls(c1), kind: "rmuet", pen: -1 });
     }
@@ -1650,6 +1651,33 @@ const ThaiTone = (() => {
     return sol ? { syls: sol.syls, guided, cost: sol.cost } : null;
   }
 
+  function enumParses(s, expected, bound) {
+    const n = s.length, cache = new Map(), out = [];
+    const opts = i => { if (!cache.has(i)) cache.set(i, parseAt(s, i)); return cache.get(i); };
+    const dead = new Map();
+    function minCost(i, r) { // meilleur coût restant (mémoïsé)
+      const key = i + "," + r;
+      if (dead.has(key)) return dead.get(key);
+      let b = Infinity;
+      if (i === n) b = r === 0 ? 0 : Infinity;
+      else if (r > 0) for (const o of opts(i)) { const w = o.link ? 2 : 1; if (r < w) continue; const c = o.cost + minCost(o.end, r - w); if (c < b) b = c; }
+      dead.set(key, b); return b;
+    }
+    const best = minCost(0, expected);
+    if (!isFinite(best)) return [];
+    const lim = best + bound;
+    (function go(i, r, acc, cost) {
+      if (out.length >= 400) return;
+      if (i === n) { if (r === 0) out.push({ syls: acc.slice(), cost }); return; }
+      for (const o of opts(i)) {
+        const w = o.link ? 2 : 1; if (r < w) continue;
+        const c = cost + o.cost; if (c + minCost(o.end, r - w) > lim) continue;
+        acc.push(o); go(o.end, r - w, acc, c); acc.pop();
+      }
+    })(0, expected, [], 0);
+    return out;
+  }
+
   // --- ton ---
   const T = { mid: "moyen", low: "bas", fall: "descendant", high: "haut", rise: "montant" };
   const MARKS = { "่": "ไม้เอก ่", "้": "ไม้โท ้", "๊": "ไม้ตรี ๊", "๋": "ไม้จัตวา ๋" };
@@ -1686,13 +1714,15 @@ const ThaiTone = (() => {
   }
   function romTone(syl) {
     const d = syl.normalize("NFD");
-    if (/̀/.test(d)) return "low";
-    if (/̂/.test(d)) return "fall";
-    if (/́/.test(d)) return "high";
-    if (/̌/.test(d)) return "rise";
+    if (/\u0300/.test(d)) return "low";
+    if (/\u0302/.test(d)) return "fall";
+    if (/\u0301/.test(d)) return "high";
+    if (/[\u030C\u0306]/.test(d)) return "rise";
     return "mid";
   }
+  const hasBreve = rom => /[\u0306]/.test((rom || "").normalize("NFD"));
 
+  const EXC = ["ประโยค","ประโยชน์","ตำรวจ","สำรวจ","บริ","ศุลกากร","ซอส","พาสต้า","ช็อค","ตู้เซฟ","จากุซซี่","อพาร์ต","แอปเปิล","บัส","โฮสเทล","โปสการ์ด","พาสปอร์ต","เต็นท์","แจ็กเก็ต","ฤ","สัปดาห์","ผลไม้","ขณะ","เอกสาร","เหตุ","เมล็ด","เกษียณ","อุปกรณ์","ภรรยา","กรกฎาคม","วัฒนธรรม","ธรรมชาติ","รัฐบาล","นิรโทษ","พฤติ","อัยการ","พิจารณา","แผนก","ตลอด","เสมอ","แสดง","มลภาวะ","มาตรการ","ศัลย","สมุทร","เทศบาล","สถานการณ์","รสชาติ","เทศกาล","อาชญา","พยาบาล","สวรรค์","สรรพ","ศิลปะ","ยานพาหนะ","แมลง","แสตมป์","กาญจน","สนทนา","สภา","อากร","เกษตร","สมอง","สาธารณะ","โรงพยาบาล","แบตเตอรี่","มังสวิรัติ","ชีพจร","ปฏิบัติ","จราจร","ธุรกิจ","กุมาร","ฆาตกร","บริกร","แคลอรี่","เภสัช","ผู้บริ","นรี","ประสาท","เวช","รังสี","ตึกระฟ้า","ข้อเสนอแนะ","ภาวะ"];
   const ORTHO = { "เหตุ": "เหต", "สามารถ": "สามาด" };
 
   function expandLinks(list) {
@@ -1747,7 +1777,17 @@ const ThaiTone = (() => {
       seg = segment(s, expected);
     }
     if (!seg) return { thai, ok: false, reason: "Découpage impossible (mot rare, emprunt ou forme non prévue)." };
-    const syls = finish(seg.syls, s, romSyl);
+    let syls = finish(seg.syls, s, romSyl);
+    if (expected && !src.includes("ๆ") && syls.length === expected && !syls.every((x, i) => romTone(romSyl[i]) === x.tone)) {
+      let bestS = syls, bestN = syls.filter((x, i) => romTone(romSyl[i]) === x.tone).length;
+      for (const p of enumParses(s, expected, 3.5)) {
+        const cand = finish(p.syls, s, romSyl);
+        if (cand.length !== expected) continue;
+        const nOk = cand.filter((x, i) => romTone(romSyl[i]) === x.tone).length;
+        if (nOk > bestN) { bestN = nOk; bestS = cand; if (nOk === expected) break; }
+      }
+      syls = bestS;
+    }
     const res = { thai, cleaned: s, ok: true, syls, guided: seg.guided, expected, romSyl };
     if (romSyl.length) {
       res.countMatch = romSyl.length === syls.length;
@@ -1756,11 +1796,15 @@ const ThaiTone = (() => {
         res.match = syls.every(x => x.match);
       } else res.match = false;
     }
+    res.breve = hasBreve(rom);
+    if (romSyl.length && !res.match) { const k = EXC.find(k => (thai || "").includes(k)); if (k) res.exception = k; }
     return res;
   }
 
   return { analyze, clean, romSyllables, romTone, cls, NAMES, T, CLASS_FR, MARKS, FIN };
 })();
+
+  
 
   /* ===== v11 : Pourquoi ce ton ? ===== */
   const TONE_COL = { mid: "#94a3b8", low: "#60a5fa", fall: "#f87171", high: "#fbbf24", rise: "#34d399" };
@@ -1788,7 +1832,7 @@ const ThaiTone = (() => {
       res = `<div class="tsy-q">Quel ton ? ` + ["mid", "low", "fall", "high", "rise"].map(t => `<button class="tbtn" style="border-color:${TONE_COL[t]}" onclick="toneGuess('${key}','${t}','${sy.tone}')">${TONE_EX[t]}</button>`).join("") + `</div>`;
     } else {
       const g = toneAnswered[key];
-      const verdict = (g ? `<div class="tsy-g">${g.ok ? "✅ Bien vu !" : "❌ Tu avais choisi " + ThaiTone.T[g.t] + "."}</div>` : "") + (sy.romSyl ? (sy.match ? `<span class="tchk ok">✓ cohérent avec la romanisation du lexique</span>` : `<span class="tchk ko">⚠️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} : à vérifier (exception du mot, mot savant, ou à corriger dans le lexique)</span>`) : "");
+      const verdict = (g ? `<div class="tsy-g">${g.ok ? "✅ Bien vu !" : "❌ Tu avais choisi " + ThaiTone.T[g.t] + "."}</div>` : "") + (sy.romSyl ? (sy.match ? `<span class="tchk ok">✓ cohérent avec la romanisation du lexique</span>` : toneItems[wi] && toneItems[wi].res.exception ? `<span class="tchk ex">ℹ️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} (mot irrégulier)</span>` : `<span class="tchk ko">⚠️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} : à vérifier (exception du mot, mot savant, ou à corriger dans le lexique)</span>`) : "");
       res = `${g ? "" : ""}<div class="tsy-t" style="color:${col}">→ ton <b>${ThaiTone.T[sy.tone]}</b> (${TONE_EX[sy.tone]})</div>${verdict}<div class="tsy-rule">${esc(sy.rule)}</div>`;
     }
     if (test) return `<div class="tsy" style="border-color:var(--border)">${head}${res}</div>`;
@@ -1799,6 +1843,8 @@ const ThaiTone = (() => {
     if (!r || !r.ok) return `<div class="tword"><div class="tw-h">${esc(it.thai)}</div><p class="tmuted">${esc(r && r.reason || "Rien à analyser.")}</p></div>`;
     let warn = "";
     if (r.romSyl && r.romSyl.length && !r.countMatch) warn = `<p class="tchk ko">⚠️ Mon découpage donne ${r.syls.length} syllabes, ta romanisation en a ${r.romSyl.length} : comparaison impossible, vérifie le découpage.</p>`;
+    if (r.breve) warn += `<p class="tchk ko">⚠️ Ta romanisation utilise l'accent ă ĕ ĭ ŏ ŭ (breve) : je le lis comme un ton montant (ǎ ě ǐ ǒ ǔ). Corrige-le avec le bouton de la Configuration.</p>`;
+    if (r.exception) warn += `<p class="tchk ex">ℹ️ Mot irrégulier (mot savant, emprunt ou syllabe de liaison) : la règle seule ne suffit pas. Ta romanisation fait foi, vérifie-la avec ton prof.</p>`;
     const strip = r.syls.map(s => `<span class="tchip" style="background:${TONE_COL[s.tone]}">${esc(s.text)} ${TONE_EX[s.tone]}</span>`).join("");
     return `<div class="tword"><div class="tw-h">${esc(it.thai)} <span class="tmuted">${esc(it.rom || "")}</span></div>${toneTest ? "" : `<div class="tstrip">${strip}</div>`}${warn}${r.syls.map((s, si) => sylCardHTML(s, wi, si)).join("")}</div>`;
   }
@@ -1835,15 +1881,31 @@ const ThaiTone = (() => {
   }
   function toneReport() {
     const box = document.getElementById("tone-report");
-    let n = 0, ok = 0, cnt = 0, bad = 0, fail = 0; const list = [];
+    let n = 0, ok = 0, exc = 0, cnt = 0, bad = 0, fail = 0, brv = 0; const list = [];
     lexicon.forEach(w => {
-      if (!w.rom || !/[฀-๿]/.test(w.thai)) return;
+      if (!w.rom || !/[\u0E00-\u0E7F]/.test(w.thai)) return;
       const r = ThaiTone.analyze(w.thai, w.rom); n++;
-      if (!r || !r.ok) { fail++; list.push({ w, why: "découpage impossible" }); return; }
-      if (r.match) ok++; else if (!r.countMatch) { cnt++; list.push({ w, why: `${r.syls.length} syllabes trouvées / ${r.romSyl.length} dans la romanisation` }); }
-      else { bad++; list.push({ w, why: r.syls.filter(s => !s.match).map(s => `${s.text} : moteur ${ThaiTone.T[s.tone]}, lexique ${ThaiTone.T[s.romTone]}`).join(" ; ") }); }
+      if (!r || !r.ok) { fail++; list.push({ w, k: 3, why: "découpage impossible" }); return; }
+      if (r.breve) brv++;
+      if (r.match) ok++;
+      else if (r.exception) exc++;
+      else if (!r.countMatch) { cnt++; list.push({ w, k: 2, why: `${r.syls.length} syllabes trouvées / ${r.romSyl.length} dans la romanisation` }); }
+      else { bad++; list.push({ w, k: 1, why: r.syls.filter(s => !s.match).map(s => `${s.text} : moteur ${ThaiTone.T[s.tone]}, lexique ${ThaiTone.T[s.romTone]}`).join(" ; ") }); }
     });
-    box.innerHTML = `<p><b>${n ? Math.round(1000 * ok / n) / 10 : 0} %</b> des entrées sont cohérentes (${ok} sur ${n}). Divergences de ton : ${bad} · découpage différent : ${cnt} · non analysables : ${fail}.</p><p class="tmuted">Une divergence n'est pas forcément une erreur : mots savants, exceptions et emprunts ne suivent pas toujours la règle. Mais elle peut révéler une faute de romanisation dans ton lexique. Touche un mot pour voir l'explication.</p><div style="max-height:340px; overflow:auto;">` + list.map(x => `<div class="trow" onclick="toneForLex('${x.w.id}')"><b>${esc(x.w.thai)}</b> <span class="tmuted">${esc(x.w.rom)}</span><br><small>${esc(x.why)}</small></div>`).join("") + `</div>`;
+    list.sort((a, b) => a.k - b.k);
+    const pct = x => n ? Math.round(1000 * x / n) / 10 : 0;
+    box.innerHTML = `<p><b>${pct(ok + exc)} %</b> d'entrées cohérentes, exceptions connues comprises (${ok} règles respectées + ${exc} mots irréguliers connus, sur ${n}).</p><p>À regarder : ${bad} divergences de ton · ${cnt} découpages différents · ${fail} non analysables.</p>` + (brv ? `<p>⚠️ ${brv} entrées utilisent l'accent breve (ă ĕ ĭ ŏ ŭ). <button onclick="fixBreve()">Corriger les accents</button></p>` : "") + `<p class="tmuted">Les divergences de ton sont les plus utiles : ce sont souvent de vraies fautes (accent oublié ou mal placé). Touche un mot pour voir l'explication. Un découpage différent vient souvent d'un trait d'union oublié ou d'un mot savant.</p><div style="max-height:340px; overflow:auto;">` + list.map(x => `<div class="trow" onclick="toneForLex('${x.w.id}')"><b>${esc(x.w.thai)}</b> <span class="tmuted">${esc(x.w.rom)}</span><br><small>${esc(x.why)}</small></div>`).join("") + `</div>`;
+  }
+  function fixBreve() {
+    const map = { "\u0306": "\u030C" };
+    const todo = lexicon.filter(w => /\u0306/.test((w.rom || "").normalize("NFD")));
+    if (!todo.length) { showToast("Aucun accent à corriger."); return; }
+    if (!confirm(`Remplacer les accents breve (ă ĕ ĭ ŏ ŭ) par des accents montants (ǎ ě ǐ ǒ ǔ) dans la romanisation de ${todo.length} entrées ?`)) return;
+    const now = Date.now();
+    todo.forEach(w => { w.rom = w.rom.normalize("NFD").replace(/\u0306/g, "\u030C").normalize("NFC"); w.modifiedAt = now; });
+    try { persistLexicon(); } catch (e) { /* ignore */ }
+    renderLexicon(); updateThemeDropdowns(); toneReport();
+    showToast(`${todo.length} entrées corrigées. Pense à exporter ton lexique.`);
   }
 
   window.onload = async () => {
