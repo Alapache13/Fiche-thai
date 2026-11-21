@@ -46,6 +46,13 @@ main.content{flex:1;min-height:0;position:relative;overflow:hidden}
 .lib-head{max-width:960px;margin:0 auto 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .lib-head h1{font-size:1.5rem;margin:0}
 .lib-head .acts{display:flex;gap:8px;flex-wrap:wrap}
+.lib-bar{max-width:960px;margin:0 auto 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.crumbs{flex:1 1 100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;color:var(--muted)}
+.crumbs .c{cursor:pointer;padding:5px 10px;border-radius:9px;background:var(--panel);border:1px solid var(--border);color:var(--text);font-weight:600}
+.crumbs .c.cur{background:var(--accent,#0284c7);border-color:transparent;color:#fff}
+.lib-bar input{flex:1;min-width:170px;padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--text);font:inherit}
+.card.folder{border-left:4px solid #f59e0b}
+.card .where{font-size:.72rem;color:var(--muted)}
 .grid{max-width:960px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;position:relative;box-shadow:var(--shadow);min-height:150px;display:flex;flex-direction:column}
 .card:active{border-color:var(--accent)}
@@ -181,6 +188,7 @@ input[type=color]::-moz-color-swatch{border:2px solid var(--border);border-radiu
           <button class="btn" id="libImportBtn">📥 Importer une sauvegarde</button>
         </div>
       </div>
+      <div class="lib-bar"><div class="crumbs" id="libCrumbs"></div><input id="libSearch" type="search" placeholder="🔎 Chercher un carnet…" autocomplete="off"><button class="btn small" id="libSort"></button><button class="btn small" id="libNewFolder">📁＋ Dossier</button></div>
       <div class="grid" id="grid"></div>
     </section>
     <section class="editor hidden" id="editor">
@@ -585,7 +593,7 @@ async function removeBg(){const page=curPage();if(!page.bg){toast("Aucune image 
 const PDF_SRCS=["vendor/pdf.min.js","https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js","https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"];
 async function loadPdfJs(){if(window.pdfjsLib)return;for(const src of PDF_SRCS){try{await loadScript(src);if(window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc=src.replace("pdf.min.js","pdf.worker.min.js");return}}catch(e){}}throw new Error("pdf.js introuvable (connexion requise, ou dossier vendor/ absent)")}
 async function importPDF(file,nbTarget){if(!file)return;try{toast("Chargement de pdf.js…",0);await loadPdfJs();const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,n=pdf.numPages;
- let nb=nbTarget;const isNew=!nb;if(isNew){nb={id:uid("nb"),name:slug(file.name.replace(/\.pdf$/i,"")).replace(/-/g," ").slice(0,60)||"PDF",createdAt:Date.now(),updatedAt:Date.now(),pageIds:[]};S.notebooks.unshift(nb)}
+ let nb=nbTarget;const isNew=!nb;if(isNew){nb={id:uid("nb"),path:S.libPath||"",name:slug(file.name.replace(/\.pdf$/i,"")).replace(/-/g," ").slice(0,60)||"PDF",createdAt:Date.now(),updatedAt:Date.now(),pageIds:[]};S.notebooks.unshift(nb)}
  const cv=document.createElement("canvas");let added=0;
  for(let i=1;i<=n;i++){toast("Import PDF… page "+i+" / "+n,0);await sleep(0);const pg=await pdf.getPage(i),v1=pg.getViewport({scale:1});let sc=(PW*RS)/v1.width;if(v1.height*sc>3600)sc=3600/v1.height;const vp2=pg.getViewport({scale:sc});
   cv.width=Math.round(vp2.width);cv.height=Math.round(vp2.height);const x=cv.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,cv.width,cv.height);await pg.render({canvasContext:x,viewport:vp2}).promise;
@@ -619,7 +627,7 @@ async function importTXT(file,nbTarget){if(!file)return;try{
   if(b.k==="date"){need(LH*1.6);y+=LH*.3;cur.items.push({k:"date",s:b.s,y});y+=LH*.9;continue}
   if(b.k==="who"){need(LH*2);y+=LH*.15;cur.items.push({k:"who",s:b.s,t:b.t,c:b.c,y});y+=LH*.7;continue}
   m.font=FS+"px "+TXT_FONT;for(const l of wrapThai(m,b.s,maxW)){need(LH);cur.items.push({k:"txt",s:l,y});if(l.trim())cur.txt.push({s:thaiFix(l),x:ML,y:Math.round(y*10)/10,w:Math.round(Math.max(m.measureText(l).width,2)*10)/10,h:LH-6});y+=LH}}
- let nb=nbTarget;const isNew=!nb;if(isNew){nb={id:uid("nb"),name:slug(file.name.replace(/\.txt$/i,"")).replace(/-/g," ").slice(0,60)||"Texte",createdAt:Date.now(),updatedAt:Date.now(),pageIds:[]};S.notebooks.unshift(nb)}
+ let nb=nbTarget;const isNew=!nb;if(isNew){nb={id:uid("nb"),path:S.libPath||"",name:slug(file.name.replace(/\.txt$/i,"")).replace(/-/g," ").slice(0,60)||"Texte",createdAt:Date.now(),updatedAt:Date.now(),pageIds:[]};S.notebooks.unshift(nb)}
  const cv=document.createElement("canvas");cv.width=PW*RS;cv.height=PH*RS;let added=0;
  for(const pg of pages){toast("Import du texte… page "+(added+1)+" / "+pages.length,0);await sleep(0);
   const x=cv.getContext("2d");x.setTransform(RS,0,0,RS,0,0);x.fillStyle="#fff";x.fillRect(0,0,PW,PH);x.textBaseline="alphabetic";
@@ -654,25 +662,54 @@ async function importText(text){let obj;try{const t=text.trim();if(t[0]==="<"){c
    if(have.has(id)){if(mode==="replace")await removeNotebook(id);else{id=uid("nb");regen=true;name=(name+" (copie)").slice(0,60)}}
    const pages=[],idMap=new Map();for(const p of(n.pages||[])){const q=await normPage(p,id,legacy,regen);pages.push(q);if(p.id)idMap.set(p.id,q.id)}if(!pages.length)pages.push(newPage(id));
    const exs=[];for(const x of(n.extracts||[])){const ps=[];for(const pt of(x.parts||[])){if(!pt.imgData)continue;const aid=uid("as");await putAsset(aid,await dataURLToBlob(pt.imgData));const sr=pt.src||{};ps.push({role:pt.role==="explication"?"explication":"passage",img:aid,px:pt.px||[0,0],src:{pageId:idMap.get(sr.pageId)||sr.pageId,x:sr.x||0,y:sr.y||0,w:sr.w||1,h:sr.h||1}})}if(ps.length)exs.push({id:regen?uid("xt"):(x.id||uid("xt")),nbId:id,type:XTYPES[x.type]?x.type:"phrase",note:String(x.note||""),parts:ps,createdAt:x.createdAt||Date.now(),review:x.review||{lvl:0,due:0,n:0}})}
-   const nb={id,name,createdAt:n.createdAt||Date.now(),updatedAt:n.updatedAt||Date.now(),pageIds:pages.map(p=>p.id),extracts:exs};if(n.last&&!regen&&pages.some(p=>p.id===n.last))nb.last=n.last;
+   const nb={id,path:String(n.path||"").slice(0,200),name,createdAt:n.createdAt||Date.now(),updatedAt:n.updatedAt||Date.now(),pageIds:pages.map(p=>p.id),extracts:exs};if(n.last&&!regen&&pages.some(p=>p.id===n.last))nb.last=n.last;
    pages.forEach(p=>S.pages.set(p.id,p));S.notebooks.push(nb);await DB.tx(["notebooks","pages"],t=>{t.objectStore("notebooks").put(nb);pages.forEach(p=>t.objectStore("pages").put(p))});count++}
   hideToast();toast("✅ "+count+" carnet(s) importé(s)",3000);renderLibrary()}catch(e){hideToast();console.error(e);toast("Erreur d'import : "+e.message,5000)}}
 async function removeNotebook(id){const nb=S.notebooks.find(n=>n.id===id);if(!nb)return;for(const x of nb.extracts||[])for(const pt of x.parts)await delAsset(pt.img);for(const pid of nb.pageIds){const p=S.pages.get(pid);if(p&&p.bg){revokeAsset(p.bg);if(!DB.ok)MEM.delete(p.bg)}S.pages.delete(pid);HIST.delete(pid);dirty.pages.delete(pid)}dirty.nbs.delete(id);await DB.deleteNotebook(id);S.notebooks=S.notebooks.filter(n=>n.id!==id)}
 
 /* ════════════ Bibliothèque & navigation ════════════ */
-function renderLibrary(){updateXBadge();const g=$("#grid");g.replaceChildren();
- g.append(el("div",{cls:"card new",on:{click:async()=>{const n=await promptText("Nouveau carnet","Nom du carnet","","Créer");if(!n)return;const nb={id:uid("nb"),name:n,createdAt:Date.now(),updatedAt:Date.now(),pageIds:[]},p=newPage(nb.id);nb.pageIds.push(p.id);S.pages.set(p.id,p);S.notebooks.unshift(nb);await DB.tx(["notebooks","pages"],t=>{t.objectStore("notebooks").put(nb);t.objectStore("pages").put(p)});openNotebook(nb.id)}}},el("div",{cls:"plus",text:"+"}),el("div",{text:"Nouveau carnet"})));
- if(!S.notebooks.length)g.append(el("div",{cls:"empty",text:"Aucun carnet pour l'instant. Crée-en un, ou importe un PDF de cours."}));
- [...S.notebooks].sort((a,b)=>b.updatedAt-a.updatedAt).forEach(nb=>{
-  g.append(el("div",{cls:"card",on:{click:()=>openNotebook(nb.id)}},el("div",{cls:"ic",text:"📕"}),el("div",{cls:"nm",text:nb.name}),el("div",{cls:"meta",text:nb.pageIds.length+" page"+(nb.pageIds.length>1?"s":"")+" · "+fmtDate(nb.updatedAt)}),
+S.libPath=LS.get("libPath","");
+const nbPath=nb=>nb.path||"",normS=t=>String(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""),parentOf=f=>f.includes("/")?f.slice(0,f.lastIndexOf("/")):"",baseOf=f=>f.slice(f.lastIndexOf("/")+1),cleanName=t=>t.replace(/[\/\\]/g,"-").trim().slice(0,40);
+const inFolder=(n,f)=>nbPath(n)===f||nbPath(n).startsWith(f+"/");
+function allFolders(){const set=new Set(LS.get("folders",[]));S.notebooks.forEach(n=>{let q="";for(const seg of nbPath(n).split("/").filter(Boolean)){q=q?q+"/"+seg:seg;set.add(q)}});return[...set].sort((a,b)=>a.localeCompare(b,"fr"))}
+function setLibPath(f){S.libPath=f;LS.set("libPath",f);renderLibrary()}
+function markNb(nb){dirty.nbs.add(nb.id);setStatus("dirty");schedule()}
+function addFolderLS(f){const l=LS.get("folders",[]);if(!l.includes(f)){l.push(f);LS.set("folders",l)}}
+async function newFolder(){const n=await promptText("Nouveau dossier","Nom du dossier","","Créer");if(!n)return null;const nm=cleanName(n);if(!nm)return null;const f=S.libPath?S.libPath+"/"+nm:nm;addFolderLS(f);return f}
+async function moveNotebook(nb){const fs=allFolders(),cur=nbPath(nb),items=[{info:"Déplacer « "+nb.name+" » vers :"},{label:(cur===""?"✔ ":"")+"🏠 Tous les carnets (racine)",fn:()=>doMove(nb,"")}];
+ fs.forEach(f=>items.push({label:(cur===f?"✔ ":"")+"　".repeat(f.split("/").length-1)+"📁 "+baseOf(f),fn:()=>doMove(nb,f)}));
+ items.push({label:"➕ Nouveau dossier…",fn:async()=>{const f=await newFolder();if(f)doMove(nb,f)}});menuModal("Déplacer le carnet",items)}
+function doMove(nb,f){nb.path=f;markNb(nb);if(f)addFolderLS(f);renderLibrary();toast("Déplacé dans « "+(f||"Tous les carnets")+" »",1800)}
+async function renameFolder(f){const n=await promptText("Renommer le dossier","Nom du dossier",baseOf(f),"Renommer");if(!n)return;const nm=cleanName(n);if(!nm||nm===baseOf(f))return;const nf=parentOf(f)?parentOf(f)+"/"+nm:nm;
+ S.notebooks.filter(x=>inFolder(x,f)).forEach(x=>{x.path=nf+nbPath(x).slice(f.length);markNb(x)});
+ LS.set("folders",LS.get("folders",[]).map(x=>x===f||x.startsWith(f+"/")?nf+x.slice(f.length):x));if(S.libPath===f||S.libPath.startsWith(f+"/"))S.libPath=nf+S.libPath.slice(f.length);LS.set("libPath",S.libPath);renderLibrary()}
+async function deleteFolder(f){const n=S.notebooks.filter(x=>inFolder(x,f)).length;if(!await ask("Supprimer le dossier ?","« "+baseOf(f)+" » sera supprimé. "+(n?"Ses "+n+" carnet(s) ne sont PAS supprimés : ils remontent d'un niveau.":"Il est vide."),"Supprimer",true))return;
+ const par=parentOf(f);S.notebooks.filter(x=>inFolder(x,f)).forEach(x=>{x.path=nbPath(x)===f?par:par+(par?"/":"")+nbPath(x).slice(f.length+1);markNb(x)});
+ LS.set("folders",LS.get("folders",[]).filter(x=>!(x===f||x.startsWith(f+"/"))));if(S.libPath===f||S.libPath.startsWith(f+"/"))S.libPath=par;LS.set("libPath",S.libPath);renderLibrary()}
+function nbCard(nb,showPath){return el("div",{cls:"card",on:{click:()=>openNotebook(nb.id)}},el("div",{cls:"ic",text:"📕"}),el("div",{cls:"nm",text:nb.name}),showPath&&nbPath(nb)?el("div",{cls:"where",text:"📁 "+nbPath(nb).split("/").join(" › ")}):"",el("div",{cls:"meta",text:nb.pageIds.length+" page"+(nb.pageIds.length>1?"s":"")+" · "+fmtDate(nb.updatedAt)}),
    el("div",{cls:"acts"},
+    el("button",{cls:"mini",title:"Déplacer dans un dossier",text:"📂",on:{click:e=>{e.stopPropagation();moveNotebook(nb)}}}),
     el("button",{cls:"mini",title:"Renommer",text:"✏️",on:{click:async e=>{e.stopPropagation();const n=await promptText("Renommer","Nom du carnet",nb.name,"Renommer");if(n){nb.name=n;touchNb(nb);renderLibrary()}}}}),
     el("button",{cls:"mini",title:"Exporter ce carnet (.json)",text:"⬇",on:{click:e=>{e.stopPropagation();exportBackup(nb.id)}}}),
-    el("button",{cls:"mini",title:"Supprimer",text:"🗑",on:{click:async e=>{e.stopPropagation();if(await ask("Supprimer ce carnet ?","« "+nb.name+" » et ses "+nb.pageIds.length+" page(s) seront supprimés définitivement.","Supprimer",true)){await removeNotebook(nb.id);renderLibrary()}}}}))))})}
-function updateBreadcrumb(){const bc=$("#breadcrumb");bc.replaceChildren();if(!S.nb){bc.append(el("strong",{text:"Carnets"}));return}bc.append(el("span",{cls:"link",text:"Carnets",on:{click:backToLibrary}})," / ",el("strong",{text:S.nb.name}))}
+    el("button",{cls:"mini",title:"Supprimer",text:"🗑",on:{click:async e=>{e.stopPropagation();if(await ask("Supprimer ce carnet ?","« "+nb.name+" » et ses "+nb.pageIds.length+" page(s) seront supprimés définitivement.","Supprimer",true)){await removeNotebook(nb.id);renderLibrary()}}}})))}
+function renderLibrary(){updateXBadge();const g=$("#grid");g.replaceChildren();const fs=allFolders();if(S.libPath&&!fs.includes(S.libPath))S.libPath="";
+ const q=normS($("#libSearch").value.trim()),sort=LS.get("libSort","recent"),cmp=sort==="az"?(a,b)=>a.name.localeCompare(b.name,"fr"):(a,b)=>b.updatedAt-a.updatedAt;
+ $("#libSort").textContent=sort==="az"?"↕ A → Z":"↕ Récents";
+ const cr=$("#libCrumbs");cr.replaceChildren();
+ if(q)cr.append(el("span",{text:"Résultats pour « "+$("#libSearch").value.trim()+" » dans tous les dossiers"}));
+ else{cr.append(el("span",{cls:"c"+(S.libPath?"":" cur"),text:"🏠 Tous",on:{click:()=>setLibPath("")}}));let acc="";S.libPath.split("/").filter(Boolean).forEach((seg,i,arr)=>{acc=acc?acc+"/"+seg:seg;const t=acc;cr.append("›",el("span",{cls:"c"+(i===arr.length-1?" cur":""),text:"📁 "+seg,on:{click:()=>setLibPath(t)}}))})}
+ if(q){const r=S.notebooks.filter(n=>normS(n.name).includes(q)||normS(nbPath(n)).includes(q)).sort(cmp);if(!r.length)g.append(el("div",{cls:"empty",text:"Aucun carnet ne correspond."}));r.forEach(nb=>g.append(nbCard(nb,true)));return}
+ g.append(el("div",{cls:"card new",on:{click:async()=>{const n=await promptText("Nouveau carnet","Nom du carnet","","Créer");if(!n)return;const nb={id:uid("nb"),path:S.libPath||"",name:n,createdAt:Date.now(),updatedAt:Date.now(),pageIds:[]},p=newPage(nb.id);nb.pageIds.push(p.id);S.pages.set(p.id,p);S.notebooks.unshift(nb);await DB.tx(["notebooks","pages"],t=>{t.objectStore("notebooks").put(nb);t.objectStore("pages").put(p)});openNotebook(nb.id)}}},el("div",{cls:"plus",text:"+"}),el("div",{text:"Nouveau carnet"})));
+ const subs=fs.filter(f=>parentOf(f)===S.libPath);
+ subs.forEach(f=>{const n=S.notebooks.filter(x=>inFolder(x,f)).length;g.append(el("div",{cls:"card folder",on:{click:()=>setLibPath(f)}},el("div",{cls:"ic",text:"📁"}),el("div",{cls:"nm",text:baseOf(f)}),el("div",{cls:"meta",text:n+" carnet"+(n>1?"s":"")}),el("div",{cls:"acts"},el("button",{cls:"mini",title:"Renommer le dossier",text:"✏️",on:{click:e=>{e.stopPropagation();renameFolder(f)}}}),el("button",{cls:"mini",title:"Supprimer le dossier (les carnets sont conservés)",text:"🗑",on:{click:e=>{e.stopPropagation();deleteFolder(f)}}}))))});
+ const here=S.notebooks.filter(n=>nbPath(n)===S.libPath).sort(cmp);
+ if(!S.notebooks.length)g.append(el("div",{cls:"empty",text:"Aucun carnet pour l'instant. Crée-en un, ou importe un PDF de cours."}));
+ else if(!here.length&&!subs.length)g.append(el("div",{cls:"empty",text:"Dossier vide : crée un carnet ici, ou déplace-en un avec 📂."}));
+ here.forEach(nb=>g.append(nbCard(nb,false)))}
+function updateBreadcrumb(){const bc=$("#breadcrumb");bc.replaceChildren();if(!S.nb){bc.append(el("strong",{text:"Carnets"}));return}bc.append(el("span",{cls:"link",text:"Carnets",on:{click:()=>backToLibrary("")}}),...nbPath(S.nb).split("/").filter(Boolean).flatMap((seg,i,arr)=>{const t=arr.slice(0,i+1).join("/");return[" / ",el("span",{cls:"link",text:seg,on:{click:()=>backToLibrary(t)}})]})," / ",el("strong",{text:S.nb.name}))}
 async function openNotebook(id){const nb=S.notebooks.find(n=>n.id===id);if(!nb)return;await ensurePages(nb);S.nb=nb;S.pageId=nb.pageIds.includes(nb.last)?nb.last:nb.pageIds[0];S.layerIdx=0;
  $("#library").classList.add("hidden");$("#editor").classList.remove("hidden");updateBreadcrumb();{const lz=LS.get("lockZoom",0);if(S.lock&&lz){S.fit=false;S.zoom=lz}else S.fit=true}renderPage();renderPagesSide();renderLayers();updatePageNav();updateUndoUI()}
-async function backToLibrary(){cancelInput();await flush();$("#editor").classList.add("hidden");$("#library").classList.remove("hidden");S.nb=null;S.pageId=null;updateBreadcrumb();renderLibrary()}
+async function backToLibrary(p){cancelInput();await flush();if(typeof p==="string"){S.libPath=p}else if(S.nb)S.libPath=nbPath(S.nb);LS.set("libPath",S.libPath);$("#editor").classList.add("hidden");$("#library").classList.remove("hidden");S.nb=null;S.pageId=null;updateBreadcrumb();renderLibrary()}
 
 /* ════════════ Menus ════════════ */
 function diagText(){const d=DIAG;return"Version du 8 nov. 2026 · tracé "+(S.strokeMode==="simple"?"simple":"lissé")+". Diagnostic d'écriture (depuis l'ouverture) : "+d.pen+" appuis du stylet · "+d.strokes+" traits enregistrés · "+d.cancel+" annulations du système · "+d.forced+" fins de trait récupérées · "+d.hover+" fins au survol."}
@@ -703,6 +740,7 @@ function bindUI(){
  $("#undoBtn").addEventListener("click",undo);$("#redoBtn").addEventListener("click",redo);$("#clearBtn").addEventListener("click",clearLayer);
  $("#fingerBtn").addEventListener("click",()=>setFinger(S.finger==="auto"?"draw":S.finger==="draw"?"nav":"auto",true));
  $("#pagesToggle").addEventListener("click",()=>togglePanel("pages"));$("#layersToggle").addEventListener("click",()=>togglePanel("layers"));
+ $("#libSearch").addEventListener("input",renderLibrary);$("#libSort").addEventListener("click",()=>{LS.set("libSort",LS.get("libSort","recent")==="az"?"recent":"az");renderLibrary()});$("#libNewFolder").addEventListener("click",async()=>{const f=await newFolder();if(f){S.libPath=f;LS.set("libPath",f);renderLibrary()}});
  $("#toolsBtn").addEventListener("click",openTools);$("#backBtn").addEventListener("click",backToLibrary);
  $("#prevBtn").addEventListener("click",()=>stepPage(-1));$("#nextBtn").addEventListener("click",()=>stepPage(1));$("#addPageBtn").addEventListener("click",addPage);$("#extendBtn").addEventListener("click",extendPage);$("#addLayerBtn").addEventListener("click",addLayer);
  $("#zoomIn").addEventListener("click",()=>zoomCenter(1.25));$("#zoomOut").addEventListener("click",()=>zoomCenter(.8));$("#zoomFit").addEventListener("click",()=>{if(S.lock){toast("🔒 Zoom verrouillé — touche le cadenas pour le modifier",1800);return}S.fit=true;setZoom(fitZoom())});$("#lockBtn").addEventListener("click",()=>setLock(!S.lock));$("#marksBtn").classList.toggle("on",marksOn);$("#marksBtn").addEventListener("click",()=>{marksOn=!marksOn;LS.set("marks",marksOn);$("#marksBtn").classList.toggle("on",marksOn);refreshMarkers();toast(marksOn?"📍 Repères d'extraits affichés":"Repères d'extraits masqués",1500)});setLock(S.lock,true);
@@ -862,7 +900,7 @@ async function init(){applyTheme();if(mq.addEventListener)mq.addEventListener("c
  catch(e){console.warn(e);setStatus("error","⚠ Stockage indisponible");toast("Le stockage du navigateur est indisponible : exporte souvent une sauvegarde (💾).",6000)}
  updateBreadcrumb();renderLibrary();
  const lb=LS.get("lastBackup",0);if(S.notebooks.length&&Date.now()-lb>14*864e5)setTimeout(()=>toast("💾 Pense à exporter une sauvegarde de tes carnets",4500),1500)}
-window.__carnet={lineSegs,copySelection,pasteClip,liftFromErasers,importTXT,extendPage,addPage,thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
+window.__carnet={allFolders,moveNotebook,doMove,renameFolder,deleteFolder,setLibPath,lineSegs,copySelection,pasteClip,liftFromErasers,importTXT,extendPage,addPage,thaiFix,hitText,wordAt,speakBox,speakAt,DLOG,DIAG,dirty,X,exOf,allEx,openSheet,refreshMarkers,makePart,composeRegion,S,DB,exportBackup,buildBackup,importText,importPDF,openNotebook,flush,applyAction,undo,redo,composePage,buildPDF,exportPDF,pageToJpeg,nbPages,fitZoom,setZoom,renderLibrary};
 init();
 })();
 </script>
