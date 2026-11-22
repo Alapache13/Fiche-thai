@@ -774,14 +774,16 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     renderPhrase(); renderButtons(); checkVerifiedMatch();
   }
 
+  let showAllCats = false;
   function renderButtons() {
     const catContainer = document.getElementById("category-btns");
     catContainer.innerHTML = "";
     const rules = grammarConfig.GRAMMAR_RULES;
     const lastReal = currentPhrase.length > 0 ? currentPhrase[currentPhrase.length - 1] : null;
     const allowedCats = (!lastReal || lastReal.cat === "__SPACE__") ? rules["__START__"] : (rules[lastReal.cat] || []);
-    if (allowedCats.length === 0) { catContainer.innerHTML = "<em>Fin de phrase.</em>"; return; }
-    allowedCats.forEach(cat => {
+    const shownCats = showAllCats ? [...new Set(lexicon.map(w => w.cat))].sort() : allowedCats;
+    if (shownCats.length === 0) { const em = document.createElement("em"); em.textContent = "Fin de phrase selon les règles. "; catContainer.appendChild(em); }
+    shownCats.forEach(cat => {
       const btn = document.createElement("button");
       btn.className = "btn-cat";
       btn.textContent = cat;
@@ -789,6 +791,12 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
       btn.onclick = () => selectCategory(cat);
       catContainer.appendChild(btn);
     });
+    const more = document.createElement("button");
+    more.className = "btn-cat"; more.style.backgroundColor = "#334155";
+    more.textContent = showAllCats ? "↩ Catégories prévues" : "⋯ Toutes les catégories";
+    more.title = "Pour continuer la phrase même si la règle de grammaire ne prévoit pas cette catégorie";
+    more.onclick = () => { showAllCats = !showAllCats; renderButtons(); };
+    catContainer.appendChild(more);
     document.getElementById("word-select").innerHTML = '<option value="" disabled selected>+ Sélectionnez une catégorie ci-dessus...</option>';
     document.getElementById("word-search").style.display = "none";
     document.getElementById("word-search").value = "";
