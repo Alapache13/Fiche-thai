@@ -1,0 +1,2041 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Générateur de Phrases Thaï</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f172a">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --muted: #94a3b8; --border: #334155; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+  body { background: var(--bg); color: var(--text); padding: 20px; max-width: 950px; margin: 0 auto; }
+  h1 { text-align: center; color: var(--accent); margin-bottom: 20px; }
+  h3 { margin-bottom: 10px; }
+  .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
+  .tab { padding: 10px 20px; cursor: pointer; background: none; border: none; color: var(--muted); font-size: 15px; font-weight: bold; }
+  .tab.active { color: var(--accent); border-bottom: 3px solid var(--accent); }
+  .panel { display: none; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); }
+  .panel.active { display: block; }
+  .phrase-box { min-height: 80px; border: 2px dashed var(--border); border-radius: 8px; padding: 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 15px; }
+  .token { background: rgba(255,255,255,0.05); border: 1px solid; border-radius: 6px; padding: 6px 12px; display: flex; flex-direction: column; align-items: center; position: relative; }
+  .token .del { position: absolute; top: -5px; right: 2px; cursor: pointer; color: #ef4444; font-weight: bold; }
+  .token .th { font-size: 18px; font-weight: bold; }
+  .token .ro { font-size: 12px; color: var(--muted); }
+  .token .se { font-size: 12px; color: #e2e8f0; margin-top: 3px; padding: 1px 6px; border-radius: 4px; background: rgba(56,189,248,0.12); cursor: pointer; max-width: 150px; text-align: center; }
+  .token .se small { color: var(--muted); font-size: 10px; }
+  .modebar { display: flex; gap: 6px; align-items: center; margin: 8px 0; color: var(--muted); font-size: 13px; flex-wrap: wrap; }
+  .modebar button { padding: 4px 10px; font-size: 12px; }
+  .modebar button.on { background: var(--accent); color: #000; }
+  details.fullsens summary { cursor: pointer; list-style: none; }
+  details.fullsens summary::-webkit-details-marker { display: none; }
+  details.fullsens .more { margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+  .token .th { cursor: pointer; }
+  .claude-btn { background: #7c3aed; color: #fff; }
+  .avis { margin-top:10px; padding:10px 12px; border:1px solid #7c3aed; border-radius:8px; font-size:14px; white-space:pre-wrap; line-height:1.45; }
+  .avis small { display:block; color:var(--muted); margin-bottom:4px; white-space:normal; }
+  #profile-text { height: 220px; font-family: system-ui, sans-serif; font-size: 13px; }
+  .alt-panel { border: 1px solid var(--accent); border-radius: 10px; padding: 12px; margin-bottom: 15px; background: rgba(56,189,248,0.06); }
+  .alt-panel h4 { color: var(--accent); margin-bottom: 4px; font-size: 14px; }
+  .alt-panel .hint { color: var(--muted); font-size: 12px; margin-bottom: 8px; line-height: 1.4; }
+  .alt-row { display: block; width: 100%; text-align: left; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; font-weight: normal; }
+  .alt-row:hover { border-color: var(--accent); opacity: 1; }
+  .alt-row .l1 { font-size: 17px; }
+  .alt-row mark { background: rgba(56,189,248,0.3); color: var(--text); border-radius: 3px; padding: 0 2px; }
+  .alt-row .l2 { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .alt-row.orig { border-style: dashed; }
+  .alt-row .tag { font-size: 10px; background: #10b981; color: #fff; border-radius: 8px; padding: 1px 6px; margin-left: 6px; }
+  .token .role { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .controls { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .filter-bar { display: flex; gap: 10px; align-items: center; }
+  select, input, button, textarea { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 6px; font-size: 14px; }
+  select { flex: 1; }
+  button { cursor: pointer; background: var(--accent); color: #000; font-weight: bold; border: none; padding: 10px; border-radius: 6px; }
+  button:hover { opacity: 0.9; }
+  button.danger { background: #ef4444; color: white; }
+  button.secondary { background: #334155; color: var(--text); }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-cat { background: #475569; color: white; margin-right: 5px; margin-bottom: 5px; }
+  .result { background: var(--bg); padding: 15px; border-radius: 8px; margin-top: 15px; display: none; }
+  .result-line { margin-bottom: 5px; font-size: 18px; }
+  .save-row { display: flex; gap: 10px; margin-top: 15px; }
+  .save-row input { flex: 1; }
+  table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+  th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); }
+  #lexicon-table td { overflow-wrap: anywhere; word-break: break-word; }
+  textarea { width: 100%; height: 120px; font-family: monospace; margin-bottom: 10px; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: black; padding: 10px 20px; border-radius: 6px; font-weight: bold; z-index: 1000; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; color: white; }
+  .phrase-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 12px; }
+  .phrase-card .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .phrase-card .thai-line { font-size: 22px; font-weight: bold; color: var(--accent); }
+  .phrase-card .rom-line { color: var(--muted); margin: 2px 0 8px; }
+  .phrase-card .note { font-style: italic; color: var(--muted); margin: 8px 0; font-size: 13px; }
+  .phrase-card .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font-size: 11px; padding: 3px 8px; border-radius: 10px; color: white; }
+  .import-block { border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+  .import-block p { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .export-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  @media (max-width: 600px) { body { padding: 12px; } .tabs { gap: 2px; } .tab { padding: 8px 10px; font-size: 14px; } .panel { padding: 14px; } }
+  .rw { display:inline-block; text-align:center; margin:2px 1px; padding:1px 3px; border-bottom:2px solid transparent; cursor:pointer; border-radius:4px; vertical-align:top; }
+  .rw.unk { border-bottom:2px dashed #f87171; }
+  .rw.sel { background:#334155; }
+  .rt { font-size:22px; line-height:1.5; }
+  #reader-out.gloss-on .rt { display:block; }
+  .rg { display:none; font-size:11px; color:var(--muted); max-width:92px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #reader-out.gloss-on .rg { display:block; }
+  #reader-out { line-height:1.4; margin:12px 0; word-break:keep-all; }
+  #reader-detail .entry { border-top:1px solid var(--border); padding:10px 0; }
+  #reader-detail .entry:first-child { border-top:none; }
+  #reader-text { width:100%; height:140px; font-size:18px; }
+  .bfind { margin-bottom:10px; }
+  .bres { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 10px; border:1px solid var(--border); border-radius:6px; margin-top:4px; cursor:pointer; background:var(--card); }
+  .bres:hover, .bres.first { border-color:var(--accent); } .bres .th { font-size:20px; font-weight:bold; } .bres .ro { color:var(--muted); } .bres .ct { flex:1; min-width:120px; }
+  .thai-mode-btn.on { background:var(--accent); color:#000; }
+  #tone-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:2000; align-items:flex-end; justify-content:center; }
+  #tone-sheet { background:var(--bg); border:1px solid var(--accent); border-radius:14px 14px 0 0; width:100%; max-width:720px; max-height:88vh; display:flex; flex-direction:column; }
+  #tone-head { display:flex; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--border); }
+  #tone-head b { flex:1; color:var(--accent); }
+  #tone-body { overflow:auto; padding:10px 12px 20px; }
+  .tword { margin-bottom:18px; } .tw-h { font-size:24px; margin-bottom:6px; } .tmuted { color:var(--muted); font-size:13px; }
+  .tstrip { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; } .tchip { color:#000; font-weight:bold; border-radius:14px; padding:3px 10px; font-size:16px; }
+  .tsy { border-left:5px solid; background:var(--card); border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:14px; line-height:1.45; }
+  .tsy ul { margin:4px 0 4px 18px; } .tsy-h { display:flex; gap:10px; align-items:baseline; } .tsy-th { font-size:22px; font-weight:bold; } .tsy-ro { color:var(--muted); }
+  .tsy-t { font-size:16px; margin-top:4px; } .tsy-form { margin-top:4px; padding:4px 8px; border-radius:6px; background:rgba(148,163,184,.14); font-size:14px; } .tsy-rule { color:var(--muted); font-size:13px; margin-top:2px; }
+  .tchk { display:inline-block; font-size:12px; border-radius:6px; padding:2px 6px; margin-top:4px; } .tchk.ok { background:rgba(16,185,129,.18); color:#34d399; } .tchk.ex { background:rgba(148,163,184,.18); color:#cbd5e1; } .tchk.ko { background:rgba(245,158,11,.18); color:#fbbf24; }
+  .tbtn { background:var(--bg); color:var(--text); border:2px solid; padding:6px 12px; margin:0 3px; font-size:16px; } .tsy-q { margin-top:6px; }
+  .trow { padding:6px 4px; border-bottom:1px solid var(--border); cursor:pointer; } .tonebtn { background:transparent; border:1px solid var(--border); color:var(--accent); padding:3px 7px; font-size:12px; border-radius:6px; }
+  #tone-test.on { background:var(--accent); color:#000; }
+</style>
+</head>
+<body>
+
+<h1>Générateur de Phrases Thaï</h1>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('builder', this)">Constructeur</button>
+  <button class="tab" onclick="switchTab('reader', this)">📖 Lecteur</button>
+  <button class="tab" onclick="switchTab('lexicon', this)">Lexique (<span id="count">0</span>)</button>
+  <button class="tab" onclick="switchTab('phrases', this)">Phrases (<span id="count-phrases">0</span>)</button>
+  <button class="tab" onclick="switchTab('recurrences', this)">Récurrences (<span id="count-recurrences">0</span>)</button>
+  <button class="tab" onclick="switchTab('config', this)">Configuration / Import</button>
+</div>
+
+<div id="p-builder" class="panel active">
+  <div id="phrase" class="phrase-box"><span style="color:var(--muted)">Sélectionnez des mots...</span></div>
+  <div id="alt-panel" class="alt-panel" style="display:none;"></div>
+  <div class="controls">
+    <div class="filter-bar">
+      <button class="secondary" onclick="clearPhrase()">Effacer</button>
+      <button onclick="undoLastWord()">Retour</button>
+      <button class="secondary" onclick="insertSpaceBreak()" title="Insère une coupure — l'espace fait office de virgule/point en thaï">␣ Nouvelle phrase</button>
+    </div>
+    <div class="bfind">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+        <input type="text" id="bsearch" data-thai="1" placeholder="🔍 Trouver un mot dans tout le lexique (thaï, romanisation ou sens)" oninput="bFind()" onkeydown="bFindKey(event)" onfocus="lastThaiInput=this" style="flex:1;">
+        <button class="ghost thai-mode-btn" onclick="toggleThaiTyping()" style="white-space:nowrap;"></button>
+        <button class="secondary" onclick="toggleThaiKeyboard('thai-keyboard-b', 'bsearch')" style="white-space:nowrap;">⌨️</button>
+      </div>
+      <div id="thai-keyboard-b" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;"></div>
+      <div id="bresults" onclick="bFindClick(event)"></div>
+    </div>
+    <div id="category-btns"></div>
+    <input type="text" id="word-search" data-thai="1" placeholder="🔍 Filtrer les mots de cette catégorie..." style="display:none;" oninput="populateWordSelect()" onfocus="lastThaiInput=this">
+    <select id="word-select" onchange="addWordToPhrase(this.value); this.value='';">
+      <option value="" disabled selected>+ Choisissez une catégorie ci-dessus...</option>
+    </select>
+  </div>
+  <div id="result-box" class="result">
+    <div class="result-line"><strong>Thaï :</strong> <span id="res-th" style="color:var(--accent)"></span></div>
+    <div class="result-line"><strong>Phonétique :</strong> <span id="res-ro"></span></div>
+    <div class="result-line"><strong>Sens :</strong> <span id="res-se"></span></div>
+    <div class="modebar">Affichage du sens :
+      <button id="mode-lisible" class="ghost" onclick="setSensMode('lisible')" title="Un seul sens par mot : la phrase se lit">Lisible</button>
+      <button id="mode-detail" class="ghost" onclick="setSensMode('detail')" title="Sens principal, puis les autres sens entre parenthèses">Détaillé</button>
+      <span style="font-size:12px;">Touche le sens sous un mot pour changer de nuance.</span>
+    </div>
+    <button style="margin-top:10px;" onclick="toneForPhrase()" title="Explication des tons, syllabe par syllabe">🔊 Pourquoi ces tons ? (phrase entière)</button>
+    <button class="claude-btn" style="margin-top:10px;" onclick="askClaudePhrase()" title="Copie une demande toute prête à coller dans Claude">🤖 Demander à Claude de vérifier</button>
+    <button class="claude-btn" style="margin-top:10px;" onclick="pasteAvis(null)" title="Colle la réponse de Claude : elle sera rangée avec la phrase quand tu l'enregistres">📥 Coller le verdict de Claude</button>
+    <button style="margin-top:10px;" onclick="copyPhrase()">📋 Copier la phrase</button>
+    <div id="avis-current"></div>
+    <button style="margin-top:10px;" onclick="copyForInterpretation()">🌐 Copier pour demander l'interprétation naturelle</button>
+    <div id="verified-match-badge" style="display:none; margin-top:10px; padding:8px 12px; background:rgba(16,185,129,0.15); border:1px solid #10b981; border-radius:6px; color:#10b981; font-size:13px;">✓ Ce schéma correspond à un modèle déjà vérifié par ton prof</div>
+    <div class="save-row">
+      <input type="text" id="phrase-note" placeholder="Note libre (contexte, pourquoi cette phrase...)">
+      <button onclick="savePhrase()">💾 Enregistrer cette phrase</button>
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:8px; color:var(--muted); font-size:13px;">
+      <input type="checkbox" id="phrase-verified" style="width:auto;"> 🎓 Vérifiée par mon prof (phrase de cours)
+    </label>
+  </div>
+</div>
+
+<div id="p-reader" class="panel">
+  <textarea id="reader-text" data-thai="1" placeholder="Colle ici un texte thaï (article, message, légende…)" oninput="saveReaderDraft()"></textarea>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0;">
+    <button onclick="analyzeReader()">🔍 Analyser le texte</button>
+    <button class="ghost" onclick="clearReader()">Effacer</button>
+    <label style="display:flex; align-items:center; gap:6px; color:var(--muted); font-size:14px;"><input type="checkbox" id="reader-gloss" style="width:auto; padding:0;" onchange="renderReader()"> Sens sous chaque mot</label>
+  </div>
+  <div id="reader-stats" style="color:var(--muted); font-size:13px;"></div>
+  <div id="reader-out"></div>
+  <div id="reader-detail"></div>
+  <div id="reader-actions" style="display:none; gap:8px; flex-wrap:wrap; margin-top:12px;">
+    <button class="claude-btn" onclick="askClaudeUnknownAll()">🤖 Demander les mots inconnus à Claude</button>
+    <button class="claude-btn" onclick="askClaudeTranslate()">🤖 Demander la traduction du texte</button>
+    <button class="claude-btn" onclick="pasteAndImport()">📥 Coller la réponse de Claude et importer</button>
+  </div>
+</div>
+
+<div id="p-lexicon" class="panel">
+  <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
+    <input type="text" id="search" data-thai="1" placeholder="Rechercher..." oninput="renderLexicon()" style="flex:2;" onfocus="lastThaiInput=this">
+    <button class="ghost thai-mode-btn" onclick="toggleThaiTyping()" style="white-space:nowrap;"></button>
+    <select id="filter-theme" onchange="renderLexicon()" style="flex:1;"><option value="">Tous les thèmes</option></select>
+    <label style="display:flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; white-space:nowrap;">
+      <input type="checkbox" id="filter-colloc-only" style="width:auto;" onchange="renderLexicon()"> 🧩 Collocations seulement
+    </label>
+    <button class="secondary" onclick="toggleThaiKeyboard()" style="white-space:nowrap;">⌨️ Clavier thaï</button>
+  </div>
+  <div id="thai-keyboard" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:15px;"></div>
+  <h3>Ajouter un mot</h3>
+  <select id="filter-new-ca" onchange="updateNewCaOptions(this.value)" style="margin-bottom: 5px; width: 100%;">
+    <option value="Tout">-- Voir toutes les catégories --</option>
+    <option value="Grammaire">Grammaire</option>
+    <option value="Verbes">Verbes</option>
+    <option value="Divers">Divers</option>
+  </select>
+  <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto; gap:8px; margin-top:5px; margin-bottom:10px;">
+    <input type="text" id="new-th" data-thai="1" placeholder="Thaï" onfocus="lastThaiInput=this">
+    <input type="text" id="new-ro" placeholder="Phonétique">
+    <input type="text" id="new-se" placeholder="Sens">
+    <select id="new-ca"></select>
+    <select id="new-th-name-select" onchange="onThemeSelectChange()">
+      <option value="Nature">Nature</option>
+      <option value="Cuisine">Cuisine</option>
+      <option value="Animaux">Animaux</option>
+      <option value="Sentiments">Sentiments</option>
+      <option value="Émotions">Émotions</option>
+      <option value="Corps">Corps</option>
+      <option value="Famille & Relations">Famille & Relations</option>
+      <option value="Maison & Vie quotidienne">Maison & Vie quotidienne</option>
+      <option value="Travail & Argent">Travail & Argent</option>
+      <option value="Déplacement & Voyage">Déplacement & Voyage</option>
+      <option value="Temps & Météo">Temps & Météo</option>
+      <option value="Communication">Communication</option>
+      <option value="Caractère">Caractère</option>
+      <option value="Société">Société</option>
+      <option value="Grammaire">Grammaire</option>
+      <option value="Expressions figées">Expressions figées</option>
+      <option value="Classificateurs">Classificateurs</option>
+      <option value="Quantité">Quantité</option>
+      <option value="Général">Général</option>
+      <option value="__autre__">Autre...</option>
+    </select>
+    <input type="text" id="new-th-name" placeholder="Précise le thème" style="display:none;">
+    <button id="add-word-btn" onclick="addNewWord()">Ajouter</button>
+  </div>
+  <button id="cancel-edit-btn" class="ghost" style="display:none; margin-bottom:10px;" onclick="cancelEditWord()">Annuler la modification</button>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+    <button class="claude-btn" onclick="askClaudeWord()" title="Écris le mot thaï dans la case « Thaï » ci-dessus, puis touche ce bouton">🤖 Demander l'entrée à Claude (mot saisi dans « Thaï »)</button>
+    <button class="claude-btn" onclick="pasteAndImport()" title="Colle la réponse de Claude (bloc JSON) et l'ajoute au lexique">📥 Coller la réponse de Claude et importer</button>
+  </div>
+  <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; color:var(--muted); font-size:14px;">
+    <input type="checkbox" id="new-is-colloc" style="width:auto; padding:0;"> 🧩 Expression / collocation (bloc figé, plusieurs mots qui vont toujours ensemble)
+  </label>
+  <input type="text" id="new-court" placeholder="Sens court (facultatif) : ex. je / cheveux. Sert dans les phrases ; sinon pris au début du sens" style="width:100%; margin-bottom:10px;">
+  <input type="text" id="new-no" placeholder="Note contextuelle" style="width:100%; margin-bottom:20px;">
+  <table id="lexicon-table" style="table-layout:fixed;">
+    <thead><tr><th style="width:19%">Thaï</th><th style="width:15%">Catégorie</th><th style="width:48%">Phonétique & Sens</th><th style="width:18%">Action</th></tr></thead>
+    <tbody id="lexicon-body"></tbody>
+  </table>
+</div>
+
+<div id="p-phrases" class="panel">
+  <input type="text" id="search-phrases" placeholder="Rechercher dans les phrases sauvegardées..." oninput="renderPhrasesTab()" style="width:100%; margin-bottom:15px;">
+  <div id="phrases-list"></div>
+</div>
+
+<div id="p-recurrences" class="panel">
+  <div class="filter-bar" style="margin-bottom:20px;">
+    <span style="color:var(--muted); font-size:14px;">Signaler une construction à partir de</span>
+    <input type="number" id="recurrence-threshold" min="2" value="3" style="width:70px;" onchange="onThresholdChange()">
+    <span style="color:var(--muted); font-size:14px;">occurrences</span>
+  </div>
+  <div id="recurrences-list"></div>
+</div>
+
+<div id="p-config" class="panel">
+  <div class="import-block">
+    <h3>🔊 Rapport de concordance des tons</h3>
+    <p>Compare, pour tout ton lexique, les tons calculés par les règles avec ceux de ta romanisation.</p>
+    <button onclick="toneReport()">Lancer le rapport</button>
+    <div id="tone-report" style="margin-top:10px;"></div>
+  </div>
+  <div class="import-block">
+    <h3>📱 Importer des fichiers (téléphone ou ordinateur)</h3>
+    <p>Choisis un ou plusieurs fichiers : le lexique exporté, les phrases, les règles de grammaire, ou le fichier « tout-en-un ». L'outil reconnaît tout seul le contenu. Le lexique est ensuite gardé dans cet appareil : tu n'as pas à le recharger à chaque ouverture.</p>
+    <input type="file" id="fileInput" multiple>
+    <div id="storage-state" style="color:var(--muted); font-size:13px; margin-top:8px;"></div>
+  </div>
+
+  <div class="import-block">
+    <h3>📁 Importer mon dossier de travail</h3>
+    <p>Sélectionne le dossier racine contenant tes sous-dossiers <strong>lexique/</strong>, <strong>phrases/</strong> et <strong>grammaire/</strong>. Tous les fichiers .js (JSON valide) qu'ils contiennent seront lus et fusionnés automatiquement dans le bon groupe.</p>
+    <input type="file" id="folderInput" webkitdirectory directory multiple>
+  </div>
+
+  <div class="import-block">
+    <h3>Ajout rapide (lexique uniquement)</h3>
+    <textarea id="import-json" placeholder='[{"thai": "กิน", "rom": "kin", "sens": "manger", "cat": "Verbe (Transitif)", "theme": "Cuisine", "note": "Demande un COD"}]'></textarea>
+    <button onclick="importJSON()">Importer / Mettre à jour le lexique</button>
+  </div>
+
+  <div class="import-block">
+    <h3>Exporter (pour ranger dans le bon sous-dossier)</h3>
+    <div class="export-row">
+      <button class="secondary" onclick="exportLexicon()">Exporter le lexique</button>
+      <button class="secondary" onclick="exportPhrases()">Exporter les phrases</button>
+      <button class="secondary" onclick="exportGrammar()">Exporter les règles de grammaire</button>
+      <button class="secondary" onclick="exportAllRecurrences()">Exporter les récurrences détectées</button>
+      <button onclick="exportAll()">📦 Exporter tout (un seul fichier)</button>
+      <button onclick="shareAll()">📤 Partager (téléphone)</button>
+    </div>
+  </div>
+
+  <div class="import-block">
+    <h3>🤖 Ma fiche d'apprentissage (jointe à chaque demande à Claude)</h3>
+    <p>Ce texte est ajouté en tête de chaque demande copiée par les boutons « Demander à Claude ». Modifie-le quand ton niveau ou tes préférences changent. Il reste dans ton navigateur et dans ton fichier : ne partage pas cet outil si tu y mets des informations personnelles.</p>
+    <textarea id="profile-text" oninput="saveProfileText()"></textarea>
+    <button class="secondary" onclick="resetProfileText()">Remettre le texte par défaut</button>
+  </div>
+
+  <div class="import-block">
+    <h3>Secours</h3>
+    <button class="danger" onclick="resetStorage()">Vider le cache local (ne touche pas tes fichiers)</button>
+    <button class="secondary" onclick="showDiagnostic()" style="margin-left:10px;">🔍 Voir l'état actuel des règles</button>
+    <pre id="diagnostic-box" style="display:none; background:var(--bg); padding:15px; border-radius:8px; margin-top:15px; white-space:pre-wrap; font-size:12px; max-height:400px; overflow:auto;"></pre>
+  </div>
+</div>
+
+<div id="tone-modal" onclick="if(event.target===this)closeTone()"><div id="tone-sheet"><div id="tone-head"><b>🔊 Pourquoi ce ton ?</b><button id="tone-test" class="ghost" onclick="toggleToneTest()">🎯 Me tester</button><button class="secondary" onclick="closeTone()">✕</button></div><div id="tone-body"></div></div></div>
+<script>
+  const LEX_KEY = "thai_lexicon_db_v4";
+  const PHRASES_KEY = "thai_phrases_db_v1";
+  const GRAMMAR_KEY = "thai_grammar_config_v1";
+
+  const DEFAULT_GRAMMAR = {
+    generatedAt: 0,
+    CAT_MAP: {
+      "Grammaire": ["Sujet", "Négation", "Marqueur", "Temps", "Connecteur"],
+      "Verbes": ["Verbe (Transitif)", "Verbe (Intransitif)"],
+      "Divers": ["Nom", "Adjectif", "Adverbe", "Particule", "Particule finale", "Classificateur", "Quantificateur", "Démonstratif"]
+    },
+    CAT_COLORS: { "Sujet": "#3b82f6", "Verbe (Transitif)": "#ef4444", "Verbe (Intransitif)": "#f87171", "Nom": "#10b981", "Adjectif": "#f59e0b", "Adverbe": "#8b5cf6", "Négation": "#ec4899", "Marqueur": "#06b6d4", "Particule": "#64748b", "Particule finale": "#a855f7", "Temps": "#14b8a6", "Connecteur": "#f97316", "Classificateur": "#84cc16", "Quantificateur": "#eab308", "Démonstratif": "#f43f5e" },
+    GRAMMAR_RULES: {
+      "__START__": ["Sujet", "Nom", "Temps", "Verbe (Transitif)", "Verbe (Intransitif)", "Adverbe", "Particule finale", "Marqueur"],
+      "Sujet": ["Marqueur", "Négation", "Verbe (Transitif)", "Verbe (Intransitif)", "Adjectif", "Nom"],
+      "Temps": ["Sujet", "Nom", "Marqueur", "Verbe (Transitif)", "Verbe (Intransitif)", "Adjectif", "Connecteur"],
+      "Marqueur": ["Sujet", "Verbe (Transitif)", "Verbe (Intransitif)", "Nom", "Adjectif", "Adverbe", "Marqueur"],
+      "Négation": ["Verbe (Transitif)", "Verbe (Intransitif)", "Adjectif", "Adverbe"],
+      "Verbe (Transitif)": ["Verbe (Transitif)", "Verbe (Intransitif)", "Nom", "Sujet", "Adverbe", "Particule", "Particule finale", "Adjectif", "Connecteur", "Classificateur", "Négation", "Marqueur"],
+      "Verbe (Intransitif)": ["Marqueur", "Verbe (Transitif)", "Verbe (Intransitif)", "Nom", "Sujet", "Adverbe", "Particule", "Particule finale", "Adjectif", "Connecteur", "Classificateur", "Négation"],
+      "Nom": ["Nom", "Verbe (Transitif)", "Verbe (Intransitif)", "Adjectif", "Adverbe", "Particule", "Particule finale", "Marqueur", "Connecteur", "Quantificateur", "Négation", "Classificateur", "Temps"],
+      "Adjectif": ["Adverbe", "Particule", "Particule finale", "Marqueur", "Connecteur", "Temps", "Nom"],
+      "Adverbe": ["Sujet", "Verbe (Transitif)", "Verbe (Intransitif)", "Particule", "Particule finale", "Connecteur", "Adverbe", "Marqueur"],
+      "Particule": ["Particule finale"],
+      "Particule finale": ["Connecteur", "Particule finale", "Verbe (Transitif)", "Verbe (Intransitif)"],
+      "Connecteur": ["Sujet", "Temps", "Verbe (Transitif)", "Verbe (Intransitif)", "Marqueur", "Adverbe", "Négation"],
+      "Classificateur": ["Adjectif", "Marqueur", "Particule finale", "Connecteur", "Démonstratif"],
+      "Démonstratif": ["Particule finale", "Marqueur", "Connecteur", "Adjectif"],
+      "Quantificateur": ["Classificateur", "Nom", "Particule finale", "Connecteur", "Marqueur"]
+    }
+  };
+
+  let lexicon = []; // Le lexique n'est plus mis en cache navigateur (trop volumineux) : il vit uniquement en mémoire, repeuplé à chaque import du dossier.
+  try { localStorage.removeItem(LEX_KEY); } catch (e) { /* ignore */ }
+  let savedPhrases = JSON.parse(localStorage.getItem(PHRASES_KEY)) || [];
+  let grammarConfig = JSON.parse(localStorage.getItem(GRAMMAR_KEY)) || DEFAULT_GRAMMAR;
+  let currentPhrase = [];
+
+
+  // ===== Sens court (pour que les phrases restent lisibles) =====
+  const SENS_MODE_KEY = "thai_sens_mode_v1";
+  let sensMode = "lisible";
+  try { sensMode = localStorage.getItem(SENS_MODE_KEY) || "lisible"; } catch (e) { /* ignore */ }
+
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+  // Liste des sens courts d'un mot : champ "court" s'il existe, sinon début du "sens"
+  // (avant le premier point, deux-points ou "Ex :"), sans parenthèses, découpé aux virgules.
+  const GLOSS_LABEL = /^(?:Adjectif|Adverbe|Nom|Verbe|Pronom|Particule|Classificateur|Connecteur|Expression|Préposition|Conjonction|Marqueur|Quantificateur|Démonstratif|Négation)\b[^:]{0,40}:\s*/i;
+
+  function glossItems(txt) {
+    let s = String(txt || "").trim().replace(/^\d+\)\s*/, "").replace(GLOSS_LABEL, "");
+    const cut = s.search(/\.(\s|$)|\s:\s|\sExemples?\s?:|\sEx\s?:|\s—\s|\sLittéralement|\sLittéral/);
+    if (cut > 0) s = s.slice(0, cut);
+    const noPar = s.replace(/\s*\([^)]*\)/g, "").trim();
+    if (noPar) s = noPar;
+    return s.split(/\s*[,;\/]\s*/).map(x => x.trim()).filter(Boolean);
+  }
+
+  function glossList(w) {
+    if (!w) return [""];
+    if (w.court && String(w.court).trim()) {
+      return String(w.court).split(/\s*\/\s*|\s*;\s*/).map(x => x.trim()).filter(Boolean).slice(0, 5);
+    }
+    const full = String(w.sens || "").trim();
+    let items;
+    if (/^\s*1\)/.test(full)) {
+      // sens numérotés (1) … 2) …) : tous les sens du premier, puis le premier de chacun des suivants
+      const parts = full.split(/\s*\b\d+\)\s+/).filter(x => x.trim());
+      const first = glossItems(parts[0]);
+      const others = parts.slice(1).map(p => glossItems(p)[0]).filter(Boolean);
+      items = first.slice(0, Math.max(1, 4 - others.length)).concat(others);
+    } else {
+      items = glossItems(full);
+    }
+    if (items.length === 0) items = [full];
+    return items.slice(0, 4).map(p => p.length > 40 ? p.slice(0, 40).replace(/\s+\S*$/, "") + "…" : p);
+  }
+
+  function senseText(t, mode) {
+    const list = glossList(t);
+    const m = mode || sensMode;
+    if (t.sp === -1 || m === "detail") return list.length > 1 ? list[0] + " (" + list.slice(1).join(" / ") + ")" : list[0];
+    return list[t.sp || 0] || list[0];
+  }
+
+  function setSensMode(m) {
+    sensMode = m;
+    try { localStorage.setItem(SENS_MODE_KEY, m); } catch (e) { /* ignore */ }
+    renderPhrase();
+    if (document.getElementById("p-phrases").classList.contains("active")) renderPhrasesTab();
+    if (document.getElementById("p-recurrences").classList.contains("active")) renderRecurrences();
+  }
+
+  function cycleSense(i) {
+    const t = currentPhrase[i];
+    if (!t) return;
+    const n = glossList(t).length;
+    if (n < 2) return;
+    const cur = (t.sp === undefined) ? 0 : t.sp;
+    t.sp = (cur === -1) ? 0 : (cur + 1 >= n ? -1 : cur + 1);
+    renderPhrase();
+  }
+
+  function phraseSensFromTokens(tokens, mode) {
+    const segs = [[]];
+    tokens.forEach(t => { if (t.cat === "__SPACE__") segs.push([]); else segs[segs.length - 1].push(senseText(t, mode)); });
+    return segs.filter(g => g.length).map(g => g.join(" • ")).join("  |  ");
+  }
+
+  function phraseSens(p) {
+    if (p.tokens && p.tokens.length) return phraseSensFromTokens(p.tokens);
+    return p.sens || "";
+  }
+
+
+  // ===== Autres mots possibles à une place donnée =====
+  let altIndex = null, altOffset = 0, altOriginal = null;
+
+  function closeAlt() {
+    altIndex = null; altOffset = 0; altOriginal = null;
+    const p = document.getElementById("alt-panel");
+    if (p) { p.style.display = "none"; p.innerHTML = ""; }
+  }
+
+  function showAlternatives(i) {
+    const t = currentPhrase[i];
+    if (!t || t.cat === "__SPACE__") return;
+    if (altIndex === i && altOriginal) { closeAlt(); return; }
+    altIndex = i; altOffset = 0;
+    altOriginal = { ...t };
+    renderAltPanel();
+  }
+
+  function altContextCounts(cat, prevCat) {
+    const counts = {};
+    savedPhrases.forEach(p => {
+      const toks = (p.tokens || []).filter(x => x.cat !== "__SPACE__");
+      toks.forEach((x, k) => {
+        const pc = k === 0 ? "__START__" : toks[k - 1].cat;
+        if (x.cat === cat && pc === prevCat) counts[x.thai] = (counts[x.thai] || 0) + (p.verified ? 3 : 1);
+      });
+    });
+    return counts;
+  }
+
+  function altCandidates(i) {
+    const cur = altOriginal;
+    const prevTok = i > 0 ? currentPhrase[i - 1] : null;
+    const prevCat = (!prevTok || prevTok.cat === "__SPACE__") ? "__START__" : prevTok.cat;
+    const counts = altContextCounts(cur.cat, prevCat);
+    const score = w => (w.theme && w.theme === cur.theme ? 3 : 0) + (counts[w.thai] || 0) + (w.type === "collocation" ? -2 : 0) + (w.priorite === "essentiel" ? 2 : 0);
+    return lexicon
+      .filter(w => w.cat === cur.cat && w.id !== cur.id && w.type !== "collocation")
+      .map(w => ({ w, sc: score(w) }))
+      .sort((a, b) => b.sc - a.sc || a.w.thai.length - b.w.thai.length || a.w.thai.localeCompare(b.w.thai, "th"))
+      .map(x => x.w);
+  }
+
+  function phraseWithHighlight(tokens, i) {
+    const parts = [];
+    tokens.forEach((t, k) => {
+      if (t.cat === "__SPACE__") { parts.push(" "); return; }
+      parts.push(k === i ? "<mark>" + esc(t.thai) + "</mark>" : esc(t.thai));
+    });
+    return parts.join("");
+  }
+
+  function renderAltPanel() {
+    const panel = document.getElementById("alt-panel");
+    const i = altIndex;
+    if (i === null || !currentPhrase[i] || !altOriginal) { closeAlt(); return; }
+    const cur = currentPhrase[i];
+    const all = altCandidates(i);
+    if (altOffset >= all.length) altOffset = 0;
+    const page = all.slice(altOffset, altOffset + 8);
+    const rowFor = (w, isOrig) => {
+      const tokens = currentPhrase.slice(); tokens[i] = { ...w, sp: 0 };
+      return `<button class="alt-row ${isOrig ? "orig" : ""}" onclick="applyAlt('${isOrig ? "" : esc(w.id).replace(/'/g, "\\'")}')">
+        <div class="l1">${phraseWithHighlight(tokens, i)}</div>
+        <div class="l2"><strong>${esc(w.rom)}</strong> · ${esc(senseText({ ...w, sp: 0 }, "lisible"))}${isOrig ? '<span class="tag" style="background:#64748b;">mot de départ</span>' : ""} — ${esc(phraseSensFromTokens(tokens, "lisible"))}</div>
+      </button>`;
+    };
+    panel.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <h4>Autres mots possibles à cette place (${esc(altOriginal.cat)})</h4>
+        <button class="ghost" style="padding:3px 10px; font-size:12px;" onclick="closeAlt()">Fermer ✕</button>
+      </div>
+      <div class="hint">Même catégorie que « ${esc(altOriginal.thai)} », classés d'abord par thème proche, puis par fréquence dans tes phrases enregistrées. Ils sont <strong>grammaticalement possibles</strong> : tous ne sont pas forcément naturels. En cas de doute, demande à ton prof ; une phrase validée par lui devient un modèle sûr. Touche une ligne pour essayer le mot.</div>
+      ${rowFor(altOriginal, true)}
+      ${page.length ? page.map(w => rowFor(w, false)).join("") : '<p style="color:var(--muted); font-size:13px;">Aucun autre mot de cette catégorie dans le lexique chargé. Importe ton dossier lexique/ dans Configuration.</p>'}
+      ${all.length > 8 ? `<button class="secondary" style="margin-top:4px;" onclick="altOffset += 8; renderAltPanel();">↻ Voir d'autres mots (${Math.min(altOffset + 8, all.length)}/${all.length})</button>` : ""}`;
+    panel.style.display = "block";
+  }
+
+  function applyAlt(id) {
+    const i = altIndex;
+    if (i === null || !currentPhrase[i]) return;
+    if (!id) { currentPhrase[i] = { ...altOriginal, sp: altOriginal.sp || 0 }; }
+    else {
+      const w = lexicon.find(x => x.id === id);
+      if (!w) return;
+      currentPhrase[i] = { ...w, sp: 0 };
+    }
+    renderPhrase(); checkVerifiedMatch();
+  }
+
+  // ===== Demander à Claude (semi-automatique : copier la demande, coller la réponse) =====
+  const PROFILE_KEY = "thai_profile_text_v1";
+  const DEFAULT_PROFILE = `FICHE D'APPRENTISSAGE (à compléter dans Configuration, onglet « Ma fiche d'apprentissage »)
+- Francophone, apprend le thaï. Niveau, objectifs et difficultés : à écrire ici.
+- Réponds en français, en tutoyant, de façon concise, avec des exemples.
+- Tout ce que tu proposes est « proposé » : seul mon prof valide.
+- Catégories de mon outil : Sujet, Négation, Marqueur, Temps, Connecteur, Verbe (Transitif), Verbe (Intransitif), Nom, Adjectif, Adverbe, Particule, Particule finale, Classificateur, Quantificateur, Démonstratif.`;
+
+  function getProfileText() {
+    try { const v = localStorage.getItem(PROFILE_KEY); if (v && v.trim()) return v; } catch (e) { /* ignore */ }
+    return DEFAULT_PROFILE;
+  }
+  function saveProfileText() { try { localStorage.setItem(PROFILE_KEY, document.getElementById("profile-text").value); } catch (e) { /* ignore */ } }
+  function resetProfileText() {
+    try { localStorage.removeItem(PROFILE_KEY); } catch (e) { /* ignore */ }
+    document.getElementById("profile-text").value = DEFAULT_PROFILE;
+    showToast("Texte par défaut remis.");
+  }
+
+  function copyText(text, okMsg) {
+    const done = () => showToast(okMsg);
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { alert("Copie impossible. Voici le texte :\n\n" + text); }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(fallback);
+    else fallback();
+  }
+
+  function askClaudePhrase() {
+    const toks = currentPhrase.filter(t => t.cat !== "__SPACE__");
+    if (toks.length === 0) return;
+    const th = document.getElementById("res-th").textContent;
+    const ro = document.getElementById("res-ro").textContent;
+    const mot = phraseSensFromTokens(currentPhrase, "lisible");
+    const struct = toks.map(t => t.cat).join(" → ");
+    const note = (document.getElementById("phrase-note").value || "").trim();
+    const text = `${getProfileText()}
+
+DEMANDE : vérifie cette phrase thaïe que j'ai construite dans mon outil.
+Thaï : ${th}
+Phonétique : ${ro}
+Mot à mot : ${mot}
+Structure : ${struct}${note ? "\nContexte : " + note : ""}
+
+Réponds en trois parties courtes :
+1. Verdict : « correcte et naturelle », « correcte mais peu naturelle » ou « à corriger », avec la version corrigée si besoin et la raison en une ligne. Si tu hésites, dis-le : je demanderai à mon prof.
+2. Sens naturel en français.
+3. Une ou deux variantes courantes à l'oral.`;
+    copyText(text, "Demande copiée ! Colle-la dans une conversation avec Claude.");
+  }
+
+  function buildWordPrompt(words, ctx) {
+    const known = words.map(w => {
+      const found = lexicon.filter(x => normThai(x.thai) === w);
+      const c = ctx && ctx[w] ? `\n   contexte lu : « ${ctx[w]} »` : "";
+      return `${w} : ${found.length ? "déjà dans mon lexique (" + found.map(f => f.cat).join(", ") + ")" : "pas encore dans mon lexique"}${c}`;
+    }).join("\n");
+    return `${getProfileText()}
+
+DEMANDE : prépare l'entrée de lexique pour ${words.length > 1 ? "ces mots" : "ce mot"} :
+${known}
+
+Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un objet par mot, au format enrichi :
+[{"thai": "...", "rom": "...", "sens": "...", "court": "...", "cat": "...", "theme": "...", "type": "mot", "note": "...", "modifiedAt": ${Date.now()}}]
+- sens : développé (décomposition ou étymologie, nuances, exemple d'usage dans la phrase, registre).
+- court : le sens à afficher dans mes phrases, 1 à 3 sens séparés par « / ».
+- cat : une des catégories de mon outil (liste ci-dessus).
+- Si le mot est déjà dans mon lexique, ne le refais que si tu peux l'enrichir.`;
+  }
+
+  function askClaudeWord() {
+    const raw = document.getElementById("new-th").value.trim();
+    if (!raw) { alert("Écris d'abord le mot thaï dans la case « Thaï »."); return; }
+    const words = raw.split(/[\s,;]+/).map(w => normThai(w)).filter(Boolean);
+    copyText(buildWordPrompt(words), "Demande copiée ! Colle-la dans Claude, puis reviens ici avec « Coller la réponse ».");
+  }
+
+  // Lecture du presse-papiers : essaie deux fois (la 1re fois, le navigateur demande l'autorisation),
+  // puis propose une case de collage manuelle. Renvoie le texte, ou null si abandon.
+  async function readClipboardText() {
+    for (let i = 0; i < 2; i++) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const t = await navigator.clipboard.readText();
+          if (t && t.trim()) return t;
+        }
+      } catch (e) { /* on réessaie */ }
+      await new Promise(r => setTimeout(r, 700));
+    }
+    const t = window.prompt("Le navigateur n'a pas donné accès au presse-papiers.\nColle ici le texte copié (appui long dans la case, puis « Coller »), puis valide :");
+    return t && t.trim() ? t : null;
+  }
+
+  let currentAvis = "";
+  function renderAvisCurrent() {
+    const el = document.getElementById("avis-current");
+    if (!el) return;
+    el.innerHTML = currentAvis
+      ? '<div class="avis"><small>🤖 Avis de Claude collé · il sera rangé avec la phrase à l\'enregistrement <button class="ghost" style="padding:2px 8px; font-size:11px;" onclick="currentAvis=\'\';renderAvisCurrent()">Retirer</button></small>' + esc(currentAvis) + "</div>"
+      : "";
+  }
+  async function pasteAvis(phraseId) {
+    if (!phraseId && currentPhrase.filter(t => t.cat !== "__SPACE__").length === 0) { alert("Construis d'abord la phrase, puis colle le verdict."); return; }
+    const raw = await readClipboardText();
+    if (!raw) return;
+    const text = raw.trim().slice(0, 4000);
+    if (/^FICHE D'APPRENTISSAGE/.test(text)) { alert("Ce texte est ta demande, pas la réponse de Claude. Colle la demande chez Claude, puis copie sa réponse."); return; }
+    if (phraseId) {
+      const p = savedPhrases.find(x => x.id === phraseId);
+      if (!p) return;
+      p.avis = text; p.avisDate = new Date().toISOString();
+      savePhrasesStore(); renderPhrasesTab();
+      showToast("Avis de Claude rangé avec la phrase. Pense à exporter tes phrases.");
+    } else {
+      currentAvis = text; renderAvisCurrent();
+      showToast("Verdict collé. Enregistre la phrase pour le garder.");
+    }
+  }
+  function removeAvis(id) {
+    const p = savedPhrases.find(x => x.id === id);
+    if (!p || !confirm("Retirer l'avis de Claude de cette phrase ?")) return;
+    delete p.avis; delete p.avisDate;
+    savePhrasesStore(); renderPhrasesTab();
+  }
+
+  function extractJSONArray(text) {
+    let t = String(text || "").replace(/```(?:json|js|javascript)?/gi, "");
+    const a = t.indexOf("["), b = t.lastIndexOf("]");
+    if (a === -1 || b === -1 || b < a) throw new Error("Aucun tableau JSON trouvé dans le texte collé.");
+    return JSON.parse(t.slice(a, b + 1));
+  }
+
+  function importFromText(text) {
+    const data = extractJSONArray(text);
+    if (!Array.isArray(data) || data.length === 0) throw new Error("Tableau vide.");
+    const bad = data.filter(x => !x || !x.thai || !x.rom || !x.sens || !x.cat);
+    if (bad.length) throw new Error(bad.length + " entrée(s) incomplète(s) (thai, rom, sens, cat obligatoires).");
+    const s = mergeLexicon(data);
+    saveLexicon(); renderAll();
+    showToast(`${s.added} nouveau(x), ${s.updated} mis à jour${s.skipped ? ", " + s.skipped + " conservés (version plus récente)" : ""}. Pense à exporter le lexique.`);
+  }
+
+  async function pasteAndImport() {
+    const text = await readClipboardText();
+    if (!text) return;
+    try { importFromText(text); }
+    catch (e) { alert("Je n'ai pas pu importer : " + e.message); }
+  }
+
+  function init() { document.getElementById("profile-text").value = getProfileText(); cleanDuplicates(); updateNewCaOptions("Tout"); onThemeSelectChange(); renderAll(); updateThaiModeBtns(); }
+
+  function cleanDuplicates() {
+    const seen = new Set();
+    const uniqueLexicon = [];
+    let hasDuplicates = false;
+    lexicon.forEach(w => {
+      const key = normThai(w.thai) + "__" + w.cat;
+      if (!seen.has(key)) { seen.add(key); uniqueLexicon.push(w); }
+      else { hasDuplicates = true; }
+    });
+    if (hasDuplicates) { lexicon = uniqueLexicon; saveLexicon(); }
+  }
+
+  function updateNewCaOptions(filter) {
+    const select = document.getElementById("new-ca");
+    select.innerHTML = "";
+    const map = grammarConfig.CAT_MAP;
+    let cats = (filter === "Tout") ? [...map.Grammaire, ...map.Verbes, ...map.Divers] : map[filter];
+    cats.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; select.appendChild(o); });
+  }
+
+  function switchTab(t, el) {
+    document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(`p-${t}`).classList.add('active');
+    if (t === 'phrases') renderPhrasesTab();
+    if (t === 'recurrences') renderRecurrences();
+  }
+
+  function saveLexicon() {
+    // Volontairement pas de localStorage.setItem ici : le lexique reste en mémoire seulement,
+    // pour éviter de saturer le stockage du navigateur. Pense à exporter régulièrement.
+    document.getElementById("count").textContent = lexicon.length;
+    persistLexicon();
+  }
+  function savePhrasesStore() {
+    try {
+      localStorage.setItem(PHRASES_KEY, JSON.stringify(savedPhrases));
+    } catch (e) {
+      alert("Erreur de sauvegarde : " + e.message + "\n\nTon navigateur a peut-être atteint sa limite de stockage local. Essaie d'exporter ton lexique/tes phrases puis de vider le cache local.");
+      console.error("Erreur savePhrasesStore:", e);
+    }
+    document.getElementById("count-phrases").textContent = savedPhrases.length;
+  }
+  function saveGrammarStore() {
+    try {
+      localStorage.setItem(GRAMMAR_KEY, JSON.stringify(grammarConfig));
+    } catch (e) {
+      alert("Erreur de sauvegarde des règles : " + e.message);
+      console.error("Erreur saveGrammarStore:", e);
+    }
+  }
+  function saveAll() { saveLexicon(); savePhrasesStore(); saveGrammarStore(); }
+
+  function renderAll() {
+    document.getElementById("count").textContent = lexicon.length;
+    document.getElementById("count-phrases").textContent = savedPhrases.length;
+    updateThemeDropdowns();
+    updateNewCaOptions(document.getElementById("filter-new-ca").value || "Tout");
+    renderPhrase();
+    renderButtons();
+    renderLexicon();
+  }
+
+  function updateThemeDropdowns() {
+    const themes = [...new Set(lexicon.map(w => w.theme || "Général"))].sort();
+    const html = '<option value="">Tous les thèmes</option>' + themes.map(t => `<option value="${t}">${t}</option>`).join('');
+    document.getElementById("filter-theme").innerHTML = html;
+  }
+
+  function renderPhrase() {
+    const box = document.getElementById("phrase");
+    const res = document.getElementById("result-box");
+    if (currentPhrase.length === 0) { box.innerHTML = '<span style="color:var(--muted)">Sélectionnez des mots...</span>'; res.style.display = "none"; closeAlt(); return; }
+    box.innerHTML = "";
+    currentPhrase.forEach((w, i) => {
+      if (w.cat === "__SPACE__") {
+        box.innerHTML += `<div style="display:flex; align-items:center; gap:4px; color:var(--muted);"><span class="del" onclick="removeWord(${i})" style="position:static; cursor:pointer;">×</span><span style="border-left:2px dashed var(--border); height:36px; margin:0 4px;"></span><span style="font-size:11px;">␣ nouvelle phrase</span><span style="border-left:2px dashed var(--border); height:36px; margin:0 4px;"></span></div>`;
+        return;
+      }
+      const color = grammarConfig.CAT_COLORS[w.cat] || '#64748b';
+      box.innerHTML += `<div class="token" style="border-color:${color}"><span class="del" onclick="removeWord(${i})">×</span><span class="role" style="color:${color}">${w.cat}</span><span class="th" style="color:${color}" onclick="showAlternatives(${i})" title="Touche le mot thaï pour voir d'autres mots possibles à cette place">${w.thai}</span><span class="ro">${w.rom}</span><button class="tonebtn" onclick="showTone([{thai:currentPhrase[${i}].thai,rom:currentPhrase[${i}].rom}])" title="Pourquoi ce ton ?">🔊</button><span class="se" onclick="cycleSense(${i})" title="${esc(w.sens)}">${esc(senseText(w))}${glossList(w).length > 1 ? ' <small>' + (w.sp === -1 ? 'tous' : ((w.sp || 0) + 1) + '/' + glossList(w).length) + '</small>' : ''}</span></div>`;
+    });
+    res.style.display = "block";
+    // Découpe la phrase en segments séparés par les coupures __SPACE__ pour un rendu propre.
+    const segments = [[]];
+    currentPhrase.forEach(w => { if (w.cat === "__SPACE__") segments.push([]); else segments[segments.length - 1].push(w); });
+    const nonEmpty = segments.filter(s => s.length > 0);
+    document.getElementById("res-th").textContent = nonEmpty.map(seg => seg.map(w => w.thai).join("")).join(" ");
+    document.getElementById("res-ro").textContent = nonEmpty.map(seg => seg.map(w => w.rom).join(" ")).join("  |  ");
+    document.getElementById("res-se").textContent = phraseSensFromTokens(currentPhrase);
+    document.getElementById("mode-lisible").classList.toggle("on", sensMode === "lisible");
+    document.getElementById("mode-detail").classList.toggle("on", sensMode === "detail");
+    if (altIndex !== null) renderAltPanel();
+  }
+
+  function insertSpaceBreak() {
+    if (currentPhrase.length === 0) return;
+    if (currentPhrase[currentPhrase.length - 1].cat === "__SPACE__") return;
+    currentPhrase.push({ id: "__SPACE__", cat: "__SPACE__", thai: " ", rom: "", sens: "" });
+    renderPhrase(); renderButtons(); checkVerifiedMatch();
+  }
+
+  let showAllCats = false;
+  function renderButtons() {
+    const catContainer = document.getElementById("category-btns");
+    catContainer.innerHTML = "";
+    const rules = grammarConfig.GRAMMAR_RULES;
+    const lastReal = currentPhrase.length > 0 ? currentPhrase[currentPhrase.length - 1] : null;
+    const allowedCats = (!lastReal || lastReal.cat === "__SPACE__") ? rules["__START__"] : (rules[lastReal.cat] || []);
+    const shownCats = showAllCats ? [...new Set(lexicon.map(w => w.cat))].sort() : allowedCats;
+    if (shownCats.length === 0) { const em = document.createElement("em"); em.textContent = "Fin de phrase selon les règles. "; catContainer.appendChild(em); }
+    shownCats.forEach(cat => {
+      const btn = document.createElement("button");
+      btn.className = "btn-cat";
+      btn.textContent = cat;
+      btn.style.backgroundColor = grammarConfig.CAT_COLORS[cat] || "#475569";
+      btn.onclick = () => selectCategory(cat);
+      catContainer.appendChild(btn);
+    });
+    const more = document.createElement("button");
+    more.className = "btn-cat"; more.style.backgroundColor = "#334155";
+    more.textContent = showAllCats ? "↩ Catégories prévues" : "⋯ Toutes les catégories";
+    more.title = "Pour continuer la phrase même si la règle de grammaire ne prévoit pas cette catégorie";
+    more.onclick = () => { showAllCats = !showAllCats; renderButtons(); };
+    catContainer.appendChild(more);
+    document.getElementById("word-select").innerHTML = '<option value="" disabled selected>+ Sélectionnez une catégorie ci-dessus...</option>';
+    document.getElementById("word-search").style.display = "none";
+    document.getElementById("word-search").value = "";
+    currentBuilderCategory = null;
+  }
+
+  let currentBuilderCategory = null;
+
+  function selectCategory(cat) {
+    currentBuilderCategory = cat;
+    document.getElementById("word-search").style.display = "block";
+    document.getElementById("word-search").value = "";
+    populateWordSelect();
+  }
+
+  function populateWordSelect() {
+    const select = document.getElementById("word-select");
+    const search = normThai(document.getElementById("word-search").value.toLowerCase());
+    select.innerHTML = '<option value="" disabled selected>Choisissez un mot...</option>';
+    const words = lexicon
+      .filter(w => w.cat === currentBuilderCategory && (!search || w.sens.toLowerCase().includes(search) || normThai(w.thai.toLowerCase()).includes(search)))
+      .sort((a, b) => glossList(a)[0].localeCompare(glossList(b)[0]));
+    words.forEach(w => { const o = document.createElement("option"); o.value = w.id; o.textContent = (w.type === "collocation" ? "🧩 " : "") + `${glossList(w).join(" / ")} | ${w.thai}`; select.appendChild(o); });
+  }
+
+  function addWordToPhrase(id) { const word = lexicon.find(w => w.id === id); if (word) { currentPhrase.push({ ...word, sp: 0 }); renderPhrase(); renderButtons(); checkVerifiedMatch(); } }
+  function undoLastWord() { if (currentPhrase.length > 0) { closeAlt(); currentPhrase.pop(); renderPhrase(); renderButtons(); checkVerifiedMatch(); } }
+  function checkVerifiedMatch() {
+    const badge = document.getElementById("verified-match-badge");
+    if (currentPhrase.length === 0) { badge.style.display = "none"; return; }
+    const currentSig = currentPhrase.map(w => w.cat).join(" → ");
+    const hasMatch = savedPhrases.some(p => p.verified && computeSignature(p) === currentSig);
+    badge.style.display = hasMatch ? "block" : "none";
+  }
+
+  function removeWord(i) { closeAlt(); currentPhrase.splice(i, 1); renderPhrase(); renderButtons(); checkVerifiedMatch(); }
+  function clearPhrase() { closeAlt(); currentPhrase = []; currentAvis = ""; renderAvisCurrent(); document.getElementById("phrase-note").value = ""; renderPhrase(); renderButtons(); checkVerifiedMatch(); }
+  function copyPhrase() { navigator.clipboard.writeText(document.getElementById("res-th").textContent).then(() => showToast("Copié !")); }
+  function copyForInterpretation() {
+    const th = document.getElementById("res-th").textContent;
+    const ro = document.getElementById("res-ro").textContent;
+    const se = document.getElementById("res-se").textContent;
+    const text = `Peux-tu me donner l'interprétation naturelle en français de cette phrase thaïe ?\n\nThaï : ${th}\nPhonétique : ${ro}\nMot à mot : ${se}`;
+    navigator.clipboard.writeText(text).then(() => showToast("Copié ! Colle-le dans une conversation avec Claude."));
+  }
+
+  function savePhrase() {
+    if (currentPhrase.length === 0) return;
+    const note = document.getElementById("phrase-note").value.trim();
+    const verified = document.getElementById("phrase-verified").checked;
+    const phraseObj = {
+      id: "p_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      date: new Date().toISOString(),
+      tokens: currentPhrase.map(w => ({ cat: w.cat, thai: w.thai, rom: w.rom, sens: w.sens, court: w.court, sp: w.sp })),
+      thai: currentPhrase.map(w => w.thai).join(""),
+      rom: currentPhrase.map(w => w.rom).join(" "),
+      sens: phraseSensFromTokens(currentPhrase, "lisible"),
+      note: note,
+      verified: verified
+    };
+    if (currentAvis) { phraseObj.avis = currentAvis; phraseObj.avisDate = new Date().toISOString(); }
+    savedPhrases.push(phraseObj);
+    savePhrasesStore();
+    document.getElementById("phrase-note").value = "";
+    document.getElementById("phrase-verified").checked = false;
+    currentAvis = ""; renderAvisCurrent();
+    const sig = computeSignature(phraseObj);
+    if (verified) {
+      showToast("Phrase enregistrée comme modèle vérifié par ton prof !");
+    } else {
+      const count = savedPhrases.filter(p => computeSignature(p) === sig).length;
+      if (count === getThreshold()) showToast(`Phrase enregistrée ! Cette construction revient ${count} fois — regarde l'onglet Récurrences.`);
+      else showToast("Phrase enregistrée !");
+    }
+    checkVerifiedMatch();
+  }
+
+  function deletePhrase(id) { if (confirm("Supprimer cette phrase ?")) { savedPhrases = savedPhrases.filter(p => p.id !== id); savePhrasesStore(); renderPhrasesTab(); } }
+
+  function renderPhrasesTab() {
+    const container = document.getElementById("phrases-list");
+    const filter = document.getElementById("search-phrases").value.toLowerCase();
+    const list = savedPhrases
+      .filter(p => !filter || p.thai.toLowerCase().includes(filter) || p.rom.toLowerCase().includes(filter) || phraseSens(p).toLowerCase().includes(filter) || (p.note || "").toLowerCase().includes(filter))
+      .slice().reverse();
+    if (list.length === 0) { container.innerHTML = '<p style="color:var(--muted)">Aucune phrase sauvegardée pour le moment.</p>'; return; }
+    container.innerHTML = list.map(p => `
+      <div class="phrase-card" style="${p.verified ? 'border-color:#10b981;' : ''}">
+        <div class="meta"><span>${p.verified ? '🎓 ' : ''}${new Date(p.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</span><button class="danger" style="padding:3px 8px; font-size:11px;" onclick="deletePhrase('${p.id}')">Supprimer</button></div>
+        <div class="thai-line">${p.thai}</div>
+        <div class="rom-line">${p.rom}</div>
+        <div>${esc(phraseSens(p))}</div>
+        ${p.tokens ? `<button class="tonebtn" onclick="toneForSavedPhrase('${p.id}')">🔊 Pourquoi ces tons ?</button>` : ''}
+        ${p.note ? `<div class="note">📝 ${p.note}</div>` : ''}
+        ${p.avis ? `<div class="avis"><small>🤖 Avis de Claude du ${new Date(p.avisDate || p.date).toLocaleDateString('fr-FR')} · proposé, non validé par le prof <button class="ghost" style="padding:2px 8px; font-size:11px;" onclick="removeAvis('${p.id}')">Retirer</button></small>${esc(p.avis)}</div>` : ''}
+        <div style="margin-top:8px;"><button class="claude-btn" style="padding:5px 10px; font-size:12px;" onclick="pasteAvis('${p.id}')">${p.avis ? '🔁 Remplacer' : '📥 Coller'} l'avis de Claude</button></div>
+        <div class="chips">${p.tokens.map(t => t.cat === "__SPACE__" ? `<span class="chip" style="background:transparent; border:1px dashed var(--border); color:var(--muted);">␣</span>` : `<span class="chip" style="background:${grammarConfig.CAT_COLORS[t.cat] || '#64748b'}">${t.cat}: ${t.thai}</span>`).join('')}</div>
+      </div>
+    `).join('');
+  }
+
+  const THRESHOLD_KEY = "thai_recurrence_threshold_v1";
+  function getThreshold() { return parseInt(localStorage.getItem(THRESHOLD_KEY)) || 3; }
+  function onThresholdChange() {
+    const val = Math.max(2, parseInt(document.getElementById("recurrence-threshold").value) || 3);
+    document.getElementById("recurrence-threshold").value = val;
+    localStorage.setItem(THRESHOLD_KEY, val);
+    renderRecurrences();
+  }
+
+  // La signature = la suite exacte des catégories de la phrase, telle qu'elle a été construite.
+  // Rien n'est imposé : deux phrases partagent une signature seulement si leur charpente
+  // grammaticale est identique mot pour mot, quels que soient les mots eux-mêmes.
+  function computeSignature(phrase) { return phrase.tokens.filter(t => t.cat !== "__SPACE__").map(t => t.cat).join(" → "); }
+
+  function groupBySignature() {
+    const groups = {};
+    savedPhrases.forEach(p => {
+      const sig = computeSignature(p);
+      if (!groups[sig]) groups[sig] = [];
+      groups[sig].push(p);
+    });
+    return groups;
+  }
+
+  function renderRecurrences() {
+    document.getElementById("recurrence-threshold").value = getThreshold();
+    const threshold = getThreshold();
+    const groups = groupBySignature();
+    const allEntries = Object.entries(groups);
+    const verifiedEntries = allEntries.filter(([sig, list]) => list.some(p => p.verified)).sort((a, b) => b[1].length - a[1].length);
+    const autoEntries = allEntries.filter(([sig, list]) => !list.some(p => p.verified) && list.length >= threshold).sort((a, b) => b[1].length - a[1].length);
+    document.getElementById("count-recurrences").textContent = verifiedEntries.length + autoEntries.length;
+    const container = document.getElementById("recurrences-list");
+    if (verifiedEntries.length === 0 && autoEntries.length === 0) {
+      container.innerHTML = `<p style="color:var(--muted)">Aucun modèle vérifié, et aucune construction n'atteint encore ${threshold} occurrences. Continue à sauvegarder des phrases — les schémas apparaîtront ici automatiquement.</p>`;
+      return;
+    }
+    const renderGroup = (sig, list, isVerified) => `
+      <div class="phrase-card" style="${isVerified ? 'border-color:#10b981;' : ''}">
+        <div class="meta"><span>${isVerified ? '🎓 Modèle vérifié · ' : ''}${list.length} occurrence(s)</span><button class="secondary" style="padding:5px 10px; font-size:12px;" onclick="exportRecurrenceGroup('${encodeURIComponent(sig)}')">Exporter ce modèle</button></div>
+        <div style="font-family:monospace; color:var(--accent); margin-bottom:10px;">${sig}</div>
+        ${list.map(p => `<div style="padding:6px 0; border-top:1px solid var(--border);">${p.verified ? '🎓 ' : ''}<strong>${p.thai}</strong> — <span style="color:var(--muted)">${p.rom}</span> — ${esc(phraseSens(p))}</div>`).join('')}
+      </div>
+    `;
+    container.innerHTML = verifiedEntries.map(([sig, list]) => renderGroup(sig, list, true)).join('') + autoEntries.map(([sig, list]) => renderGroup(sig, list, false)).join('');
+  }
+
+  function exportRecurrenceGroup(encodedSig) {
+    const sig = decodeURIComponent(encodedSig);
+    const groups = groupBySignature();
+    const list = groups[sig] || [];
+    const payload = { signature: sig, occurrences: list.length, phrases: list };
+    const slug = sig.replace(/[^a-zA-Z]+/g, "_").toLowerCase().slice(0, 40);
+    downloadJSON(payload, "recurrence_" + slug + ".js");
+  }
+
+  function exportAllRecurrences() {
+    const threshold = getThreshold();
+    const groups = groupBySignature();
+    const entries = Object.entries(groups).filter(([sig, list]) => list.length >= threshold);
+    if (entries.length === 0) return alert("Aucune récurrence détectée pour le moment.");
+    const payload = entries.map(([sig, list]) => ({ signature: sig, occurrences: list.length, phrases: list }));
+    downloadJSON(payload, "recurrences_" + dateStamp() + ".js");
+  }
+
+  let lexLimit = 300, lexSig = "", lexAll = [], lexShown = 0;
+  function lexMoreRow() { return lexShown < lexAll.length ? `<tr id="lex-more"><td colspan="4" style="text-align:center; padding:14px;"><button onclick="lexMore()">Afficher plus (${lexAll.length - lexShown} restants sur ${lexAll.length})</button></td></tr>` : ""; }
+  function lexMore() {
+    const tb = document.getElementById("lexicon-body"), m = document.getElementById("lex-more"); if (m) m.remove();
+    const from = lexShown; lexShown = Math.min(lexShown + 200, lexAll.length); lexLimit = lexShown;
+    tb.insertAdjacentHTML("beforeend", lexAll.slice(from, lexShown).join("") + lexMoreRow());
+  }
+  function renderLexicon() {
+    const tbody = document.getElementById("lexicon-body");
+    const filter = normThai(document.getElementById("search").value.toLowerCase());
+    const theme = document.getElementById("filter-theme").value;
+    const collocOnly = document.getElementById("filter-colloc-only").checked;
+    // Classement de la recherche : mot thaï identique en premier, puis mots qui commencent par la saisie,
+    // puis mots qui la contiennent, enfin correspondances dans le sens / la note. Sans saisie : ordre inchangé.
+    const rank = w => {
+      if (!filter) return 0;
+      const th = normThai(w.thai.toLowerCase());
+      if (th === filter) return 0;
+      if (th.startsWith(filter)) return 1;
+      if (th.includes(filter)) return 2;
+      return 3;
+    };
+    const sig = filter + "|" + theme + "|" + collocOnly;
+    if (sig !== lexSig) { lexSig = sig; lexLimit = 300; }
+    const rows = lexicon
+      .filter(w => (!theme || w.theme === theme) && (!collocOnly || w.type === "collocation") && (normThai(w.thai.toLowerCase()).includes(filter) || (w.sens + " " + (w.court || "")).toLowerCase().includes(filter) || (w.note || "").toLowerCase().includes(filter)))
+      .map((w, i) => ({ w, i, r: rank(w) }))
+      .sort((a, b) => a.r - b.r || (a.r && a.r < 3 ? a.w.thai.length - b.w.thai.length : 0) || a.i - b.i)
+      .map(x => x.w)
+      .map(w => {
+        const color = grammarConfig.CAT_COLORS[w.cat] || '#666';
+        const badge = w.type === "collocation" ? '🧩 ' : '';
+        return `<tr><td style="font-weight:bold; color:${color}">${badge}${w.thai}</td><td><span class="badge" style="background:${color}">${w.cat}</span></td><td>${lexCell(w)}</td><td style="white-space:nowrap;"><button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="toneForLex('${w.id}')" title="Pourquoi ce ton ?">🔊</button> <button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="editWordFromLexicon('${w.id}')">✏️</button> <button class="danger" onclick="deleteWord('${w.id}')">×</button></td></tr>`;
+      });
+    lexAll = rows; lexShown = Math.min(lexLimit, rows.length);
+    tbody.innerHTML = rows.slice(0, lexShown).join("") + lexMoreRow();
+  }
+
+  function lexCell(w) {
+    const g = glossList(w);
+    const short = g[0] + (g.length > 1 ? " (" + g.slice(1).join(" / ") + ")" : "");
+    const extra = [];
+    if (w.sens && w.sens.trim() !== short.trim() && w.sens.trim() !== g[0]) extra.push(esc(w.sens));
+    if (w.note) extra.push("<em>" + esc(w.note) + "</em>");
+    if (!extra.length) return "<strong>" + esc(w.rom) + "</strong> - " + esc(short);
+    return '<details class="fullsens"><summary><strong>' + esc(w.rom) + "</strong> - " + esc(short) + ' <span style="color:var(--muted); font-size:11px;">▾ détail</span></summary><div class="more">' + extra.join("<br><br>") + "</div></details>";
+  }
+
+  let editingWordId = null;
+
+  // Disposition Kedmanee officielle (source : pilote clavier Windows KBDTH0.DLL)
+  const THAI_KB_ROWS = [
+    [{u:"_",s:"%"},{u:"ๅ",s:"+"},{u:"/",s:"๑"},{u:"-",s:"๒"},{u:"ภ",s:"๓"},{u:"ถ",s:"๔"},{u:"ุ",s:"ู"},{u:"ึ",s:"฿"},{u:"ค",s:"๕"},{u:"ต",s:"๖"},{u:"จ",s:"๗"},{u:"ข",s:"๘"},{u:"ช",s:"๙"}],
+    [{u:"ๆ",s:"๐"},{u:"ไ",s:"\""},{u:"ำ",s:"ฎ"},{u:"พ",s:"ฑ"},{u:"ะ",s:"ธ"},{u:"ั",s:"ํ"},{u:"ี",s:"๊"},{u:"ร",s:"ณ"},{u:"น",s:"ฯ"},{u:"ย",s:"ญ"},{u:"บ",s:"ฐ"},{u:"ล",s:","},{u:"ฃ",s:"ฅ"}],
+    [{u:"ฟ",s:"ฤ"},{u:"ห",s:"ฆ"},{u:"ก",s:"ฏ"},{u:"ด",s:"โ"},{u:"เ",s:"ฌ"},{u:"้",s:"็"},{u:"่",s:"๋"},{u:"า",s:"ษ"},{u:"ส",s:"ศ"},{u:"ว",s:"ซ"},{u:"ง",s:"."}],
+    [{u:"ผ",s:"("},{u:"ป",s:")"},{u:"แ",s:"ฉ"},{u:"อ",s:"ฮ"},{u:"ิ",s:"ฺ"},{u:"ื",s:"์"},{u:"ท",s:"?"},{u:"ม",s:"ฒ"},{u:"ใ",s:"ฬ"},{u:"ฝ",s:"ฦ"}]
+  ];
+  let lastThaiInput = null;
+  let thaiKbShift = false;
+
+  const LAT_U = ["`1234567890-=", "qwertyuiop[]\\", "asdfghjkl;'", "zxcvbnm,./"];
+  const LAT_S = ["~!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"", "ZXCVBNM<>?"];
+  const KB_CODES = [
+    ["Backquote","Digit1","Digit2","Digit3","Digit4","Digit5","Digit6","Digit7","Digit8","Digit9","Digit0","Minus","Equal"],
+    ["KeyQ","KeyW","KeyE","KeyR","KeyT","KeyY","KeyU","KeyI","KeyO","KeyP","BracketLeft","BracketRight","Backslash"],
+    ["KeyA","KeyS","KeyD","KeyF","KeyG","KeyH","KeyJ","KeyK","KeyL","Semicolon","Quote"],
+    ["KeyZ","KeyX","KeyC","KeyV","KeyB","KeyN","KeyM","Comma","Period","Slash"]
+  ];
+  const CODE_MAP = {}, LETTER_MAP = {};
+  THAI_KB_ROWS.forEach((row, r) => row.forEach((k, c) => {
+    const code = KB_CODES[r][c]; CODE_MAP[code] = k;
+    if (/^Key[A-Z]$/.test(code)) LETTER_MAP[code.slice(3).toLowerCase()] = k;
+  }));
+  let thaiTyping = true;
+  try { thaiTyping = localStorage.getItem("thai_typing_v1") !== "0"; } catch (e) { /* ignore */ }
+
+  function updateThaiModeBtns() {
+    document.querySelectorAll(".thai-mode-btn").forEach(b => {
+      b.classList.toggle("on", thaiTyping);
+      b.textContent = thaiTyping ? "ก Thaï" : "A Latin";
+      b.title = thaiTyping ? "Les touches de ton clavier écrivent en thaï (dispo Kedmanee, comme sur branah.com). Clique ou appuie sur F2 pour écrire en lettres latines." : "Frappe normale (lettres latines). Clique ou appuie sur F2 pour écrire en thaï avec ton clavier.";
+    });
+  }
+  function toggleThaiTyping() {
+    thaiTyping = !thaiTyping;
+    try { localStorage.setItem("thai_typing_v1", thaiTyping ? "1" : "0"); } catch (e) { /* ignore */ }
+    updateThaiModeBtns();
+  }
+
+  function toggleThaiKeyboard(boxId, inputId) {
+    const box = document.getElementById(boxId || "thai-keyboard");
+    if (box.style.display === "none") { box.style.display = "block"; if (inputId) lastThaiInput = document.getElementById(inputId); renderThaiKeyboard(); }
+    else box.style.display = "none";
+  }
+
+  function renderThaiKeyboard() {
+    const keyStyle = "min-width:36px; padding:4px 4px; font-size:16px; background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:5px; cursor:pointer; display:flex; flex-direction:column; align-items:stretch; line-height:1.15;";
+    let html = `<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px;">
+      <button onclick="thaiKbShift=!thaiKbShift; renderThaiKeyboard();" style="background:${thaiKbShift ? 'var(--accent)' : 'var(--card)'}; color:${thaiKbShift ? '#000' : 'var(--text)'}; border:1px solid var(--border); padding:6px 14px; border-radius:5px; cursor:pointer;">⇧ Maj ${thaiKbShift ? '(actif)' : ''}</button>
+      <span style="color:var(--muted); font-size:12px;">Même disposition que branah.com : la lettre latine de la touche est en haut à gauche. Tu peux aussi taper au clavier de ton PC (F2 : thaï ⇄ latin).</span>
+    </div>`;
+    THAI_KB_ROWS.forEach((row, r) => {
+      html += `<div style="display:flex; gap:4px; margin-bottom:4px; flex-wrap:wrap;">`;
+      row.forEach((k, c) => {
+        const ch = thaiKbShift ? k.s : k.u;
+        const other = thaiKbShift ? k.u : k.s;
+        const lat = (thaiKbShift ? LAT_S : LAT_U)[r][c];
+        html += `<button style="${keyStyle}" onclick="insertThaiChar('${ch.replace(/'/g, "\\'")}')"><span style="display:flex; justify-content:space-between; gap:6px; font-size:10px; color:var(--muted);"><span style="color:var(--accent);">${esc(lat)}</span><span>${other}</span></span><span style="text-align:center; font-size:18px;">${ch}</span></button>`;
+      });
+      html += `</div>`;
+    });
+    html += `<div style="display:flex; gap:4px; margin-top:6px;">
+      <button style="${keyStyle} min-width:250px; align-items:center;" onclick="insertThaiChar(' ')">espace</button>
+      <button style="${keyStyle} min-width:70px; align-items:center;" onclick="backspaceThai()">⌫ effacer</button>
+    </div>`;
+    ["thai-keyboard", "thai-keyboard-b"].forEach(id => { const box = document.getElementById(id); if (box && box.style.display !== "none") box.innerHTML = html; });
+  }
+
+  function insertThaiChar(ch) {
+    const input = lastThaiInput || document.getElementById("search");
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    input.value = input.value.slice(0, start) + ch + input.value.slice(end);
+    input.selectionStart = input.selectionEnd = start + ch.length;
+    input.focus();
+    input.dispatchEvent(new Event("input"));
+  }
+
+  function backspaceThai() {
+    const input = lastThaiInput || document.getElementById("search");
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    if (start === end && start > 0) {
+      input.value = input.value.slice(0, start - 1) + input.value.slice(end);
+      input.selectionStart = input.selectionEnd = start - 1;
+    } else {
+      input.value = input.value.slice(0, start) + input.value.slice(end);
+      input.selectionStart = input.selectionEnd = start;
+    }
+    input.focus();
+    input.dispatchEvent(new Event("input"));
+  }
+
+  // Frappe thaï au clavier du PC (disposition Kedmanee) : les lettres suivent la lettre latine tapée, le reste suit l'emplacement de la touche.
+  document.addEventListener("keydown", e => {
+    if (e.key === "F2") { e.preventDefault(); toggleThaiTyping(); return; }
+    const t = e.target;
+    if (!thaiTyping || !t || !t.matches || !t.matches("[data-thai]") || e.isComposing) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    let k = null;
+    if (/^[a-zA-Z]$/.test(e.key)) { const lo = e.key.toLowerCase(); k = LETTER_MAP[lo]; if (k) k = { c: e.key !== lo ? k.s : k.u }; }
+    else if (CODE_MAP[e.code]) k = { c: e.shiftKey ? CODE_MAP[e.code].s : CODE_MAP[e.code].u };
+    if (!k) return;
+    e.preventDefault();
+    const start = t.selectionStart ?? t.value.length, end = t.selectionEnd ?? t.value.length;
+    t.value = t.value.slice(0, start) + k.c + t.value.slice(end);
+    t.selectionStart = t.selectionEnd = start + k.c.length;
+    t.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // Recherche dans tout le lexique depuis le Constructeur (toutes catégories)
+  const plainTxt = x => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  let bFound = [];
+  function bFind() {
+    const out = document.getElementById("bresults");
+    const q = normThai(document.getElementById("bsearch").value.trim().toLowerCase());
+    const qp = plainTxt(q);
+    if (!q) { bFound = []; out.innerHTML = ""; return; }
+    const scored = [];
+    for (const w of lexicon) {
+      const th = normThai(w.thai.toLowerCase());
+      let r = 9;
+      if (th === q) r = 0; else if (th.startsWith(q)) r = 1; else if (th.includes(q)) r = 2;
+      else if (qp && plainTxt(w.rom).includes(qp)) r = 3;
+      else if (qp && plainTxt((w.court || "") + " " + (w.sens || "")).includes(qp)) r = 4;
+      if (r < 9) scored.push({ w, r });
+    }
+    scored.sort((a, b) => a.r - b.r || a.w.thai.length - b.w.thai.length);
+    bFound = scored.slice(0, 30).map(x => x.w);
+    out.innerHTML = bFound.length ? bFound.map((w, i) => {
+      const color = grammarConfig.CAT_COLORS[w.cat] || "#666";
+      return `<div class="bres${i === 0 ? " first" : ""}" data-i="${i}"><span class="th">${w.type === "collocation" ? "🧩 " : ""}${esc(w.thai)}</span><span class="ro">${esc(w.rom)}</span><span class="ct">${esc(glossList(w).join(" / "))}</span><span class="badge" style="background:${color}">${esc(w.cat)}</span></div>`;
+    }).join("") + (scored.length > 30 ? `<div class="tmuted" style="margin-top:4px;">… ${scored.length - 30} autres : précise ta recherche.</div>` : "") : `<div class="tmuted" style="margin-top:6px;">Aucun mot trouvé. Il n'est peut-être pas encore dans ton lexique.</div>`;
+  }
+  function bFindAdd(i) {
+    const w = bFound[i]; if (!w) return;
+    addWordToPhrase(w.id);
+    const inp = document.getElementById("bsearch"); inp.value = ""; bFound = [];
+    document.getElementById("bresults").innerHTML = "";
+    inp.focus();
+  }
+  function bFindClick(e) { const row = e.target.closest(".bres"); if (row) bFindAdd(+row.dataset.i); }
+  function bFindKey(e) { if (e.key === "Enter" && bFound.length) { e.preventDefault(); bFindAdd(0); } }
+
+  function editWordFromLexicon(id) {
+    const w = lexicon.find(x => x.id === id);
+    if (!w) return;
+    editingWordId = id;
+    document.getElementById("filter-new-ca").value = "Tout";
+    updateNewCaOptions("Tout");
+    document.getElementById("new-th").value = w.thai;
+    document.getElementById("new-ro").value = w.rom;
+    document.getElementById("new-se").value = w.sens;
+    document.getElementById("new-ca").value = w.cat;
+    setThemeSelector(w.theme || "Général");
+    document.getElementById("new-no").value = w.note || "";
+    document.getElementById("new-court").value = w.court || "";
+    document.getElementById("new-is-colloc").checked = w.type === "collocation";
+    document.getElementById("add-word-btn").textContent = "💾 Enregistrer les modifications";
+    document.getElementById("cancel-edit-btn").style.display = "inline-block";
+    document.getElementById("new-th").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function cancelEditWord() {
+    editingWordId = null;
+    document.getElementById("new-th").value = "";
+    document.getElementById("new-ro").value = "";
+    document.getElementById("new-se").value = "";
+    setThemeSelector("Nature");
+    document.getElementById("new-no").value = "";
+    document.getElementById("new-court").value = "";
+    document.getElementById("new-is-colloc").checked = false;
+    document.getElementById("add-word-btn").textContent = "Ajouter";
+    document.getElementById("cancel-edit-btn").style.display = "none";
+  }
+
+  function onThemeSelectChange() {
+    const sel = document.getElementById("new-th-name-select");
+    const freeInput = document.getElementById("new-th-name");
+    if (sel.value === "__autre__") { freeInput.style.display = "block"; freeInput.value = ""; freeInput.focus(); }
+    else { freeInput.style.display = "none"; freeInput.value = sel.value; }
+  }
+
+  function getSelectedTheme() {
+    const sel = document.getElementById("new-th-name-select");
+    if (sel.value === "__autre__") return document.getElementById("new-th-name").value.trim() || "Général";
+    return sel.value;
+  }
+
+  function setThemeSelector(theme) {
+    const sel = document.getElementById("new-th-name-select");
+    const freeInput = document.getElementById("new-th-name");
+    const known = Array.from(sel.options).some(o => o.value === theme);
+    if (known) { sel.value = theme; freeInput.style.display = "none"; freeInput.value = theme; }
+    else { sel.value = "__autre__"; freeInput.style.display = "block"; freeInput.value = theme || ""; }
+  }
+
+  function addNewWord() {
+    const th = normThai(document.getElementById("new-th").value.trim());
+    const ro = document.getElementById("new-ro").value.trim();
+    const se = document.getElementById("new-se").value.trim();
+    const ca = document.getElementById("new-ca").value;
+    const theme = getSelectedTheme();
+    const note = document.getElementById("new-no").value.trim();
+    const court = document.getElementById("new-court").value.trim();
+    const type = document.getElementById("new-is-colloc").checked ? "collocation" : "mot";
+    if (!th || !ro || !se) return alert("Remplissez les champs (thaï, phonétique, sens).");
+
+    if (editingWordId) {
+      lexicon = lexicon.filter(w => w.id !== editingWordId);
+      lexicon.push({ id: makeWordId(th, ca), thai: th, rom: ro, sens: se, court: court, cat: ca, theme: theme, note: note, type: type, modifiedAt: Date.now() });
+      showToast("Mot modifié.");
+      cancelEditWord();
+      saveLexicon(); renderAll();
+      return;
+    }
+
+    const existingIndex = lexicon.findIndex(w => normThai(w.thai) === th && w.cat === ca);
+    if (existingIndex > -1) {
+      if (confirm("Ce mot existe déjà dans cette catégorie. Voulez-vous le mettre à jour ?")) {
+        lexicon[existingIndex] = { ...lexicon[existingIndex], rom: ro, sens: se, court: court, cat: ca, theme: theme, note: note, type: type, modifiedAt: Date.now() };
+        showToast("Mot mis à jour.");
+      }
+    } else {
+      lexicon.push({ id: makeWordId(th, ca), thai: th, rom: ro, sens: se, court: court, cat: ca, theme: theme, note: note, type: type, modifiedAt: Date.now() });
+      showToast("Mot ajouté.");
+    }
+    saveLexicon(); renderAll();
+  }
+
+  function deleteWord(id) { if (confirm("Supprimer ?")) { lexicon = lexicon.filter(w => w.id !== id); saveLexicon(); renderAll(); } }
+
+  function normThai(s) {
+    s = (s || "");
+    // Le thaï n'a pas d'équivalence Unicode officielle entre ำ (précomposé) et ◌ํ+า (décomposé) :
+    // .normalize() seul ne suffit pas, il faut convertir explicitement cette séquence précise.
+    s = s.replace(/\u0E4D\u0E32/g, "\u0E33");
+    return s.normalize("NFC");
+  }
+  function makeWordId(thai, cat) { return normThai(thai) + "__" + cat; }
+
+  function mergeLexicon(data) {
+    const stats = { added: 0, updated: 0, skipped: 0 };
+    if (!Array.isArray(data)) return stats;
+    const index = new Map();
+    lexicon.forEach((w, i) => { const k = normThai(w.thai) + "\u0001" + w.cat; if (!index.has(k)) index.set(k, i); });
+    data.forEach(item => {
+      item.thai = normThai(item.thai);
+      item.id = makeWordId(item.thai, item.cat);
+      const incomingTime = item.modifiedAt || 0;
+      const key = item.thai + "\u0001" + item.cat;
+      const idx = index.has(key) ? index.get(key) : -1;
+      if (idx === -1) index.set(key, lexicon.length);
+      if (idx > -1) {
+        const existingTime = lexicon[idx].modifiedAt || 0;
+        if (incomingTime >= existingTime) { lexicon[idx] = { ...lexicon[idx], ...item, modifiedAt: incomingTime }; stats.updated++; }
+        else { stats.skipped++; }
+      } else {
+        lexicon.push({ ...item, modifiedAt: incomingTime });
+        stats.added++;
+      }
+    });
+    return stats;
+  }
+
+  function mergePhrases(data) {
+    if (!Array.isArray(data)) return;
+    data.forEach(item => {
+      if (!item.id) item.id = "p_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+      const idx = savedPhrases.findIndex(p => p.id === item.id);
+      if (idx > -1) savedPhrases[idx] = item;
+      else savedPhrases.push(item);
+    });
+  }
+
+  function mergeGrammar(data) {
+    const incomingTime = data.generatedAt || 0;
+    const currentTime = grammarConfig.generatedAt || 0;
+    if (incomingTime < currentTime) return false;
+    if (data.CAT_MAP) grammarConfig.CAT_MAP = data.CAT_MAP;
+    if (data.CAT_COLORS) grammarConfig.CAT_COLORS = data.CAT_COLORS;
+    if (data.GRAMMAR_RULES) grammarConfig.GRAMMAR_RULES = data.GRAMMAR_RULES;
+    grammarConfig.generatedAt = incomingTime;
+    return true;
+  }
+
+  function importJSON() {
+    try {
+      const data = extractJSONArray(document.getElementById("import-json").value);
+      const s = mergeLexicon(data);
+      saveLexicon(); renderAll();
+      document.getElementById("import-json").value = "";
+      showToast(`${s.added} nouveau(x), ${s.updated} mis à jour${s.skipped ? ', ' + s.skipped + ' conservés (version plus récente)' : ''}.`);
+    } catch (e) { alert("Format JSON invalide."); }
+  }
+
+  document.getElementById('folderInput').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files).filter(f => /\.(js|json)$/i.test(f.name));
+    let counts = { lexAdded: 0, lexUpdated: 0, lexSkipped: 0, phrases: 0, grammaire: 0, grammaireSkipped: 0, ignores: 0 };
+    for (const file of files) {
+      const path = (file.webkitRelativePath || "").toLowerCase();
+      let bucket = null;
+      if (path.includes("/lexique/")) bucket = "lexique";
+      else if (path.includes("/phrases/")) bucket = "phrases";
+      else if (path.includes("/grammaire/")) bucket = "grammaire";
+      if (!bucket) { counts.ignores++; continue; }
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (bucket === "lexique") { const s = mergeLexicon(data); counts.lexAdded += s.added; counts.lexUpdated += s.updated; counts.lexSkipped += s.skipped; }
+        else if (bucket === "phrases") { mergePhrases(data); counts.phrases += Array.isArray(data) ? data.length : 1; }
+        else if (bucket === "grammaire") { if (mergeGrammar(data)) counts.grammaire++; else counts.grammaireSkipped = (counts.grammaireSkipped || 0) + 1; }
+      } catch (err) { console.error("Erreur de lecture", file.name, err); counts.ignores++; }
+    }
+    saveAll(); renderAll();
+    showToast(`Lexique : ${counts.lexAdded} nouveau(x), ${counts.lexUpdated} mis à jour${counts.lexSkipped ? ', ' + counts.lexSkipped + ' conservés (version plus récente)' : ''} · ${counts.phrases} phrases · ${counts.grammaire} fichier(s) de règles appliqué(s)${counts.grammaireSkipped ? ' · ' + counts.grammaireSkipped + ' règles ignorées (plus anciennes)' : ''}${counts.ignores ? ' · ' + counts.ignores + ' ignoré(s)' : ''}`);
+    e.target.value = "";
+  });
+
+  function exportLexicon() { downloadJSON(lexicon, "lexique_" + dateStamp() + ".js"); }
+  function exportPhrases() { downloadJSON(savedPhrases, "phrases_" + dateStamp() + ".js"); }
+  function exportGrammar() { downloadJSON(grammarConfig, "grammaire.js"); }
+
+  // Téléchargement par Blob (les gros fichiers échouaient avec une adresse data: sur téléphone)
+  function downloadJSON(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 4000);
+  }
+  // Partage (téléphone) : envoie le fichier vers Drive, e-mail, WhatsApp, etc. sans passer par le téléchargement
+  async function shareAll() {
+    const data = { version: 1, exportedAt: new Date().toISOString(), lexique: lexicon, phrases: savedPhrases, grammaire: grammarConfig, profil: getProfileText() };
+    const file = new File([JSON.stringify(data, null, 2)], "thai_tout_" + dateStamp() + ".json", { type: "application/json" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Mon lexique thaï" }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    alert("Le partage de fichier n'est pas disponible sur ce navigateur. Utilise « Exporter tout (un seul fichier) ».");
+  }
+
+  function dateStamp() { return new Date().toISOString().slice(0, 10); }
+
+  function showDiagnostic() {
+    const box = document.getElementById("diagnostic-box");
+    const info = {
+      generatedAt_actif: grammarConfig.generatedAt || 0,
+      generatedAt_lisible: grammarConfig.generatedAt ? new Date(grammarConfig.generatedAt).toLocaleString('fr-FR') : "jamais importé (règles par défaut du code)",
+      categories_de_depart____START__: grammarConfig.GRAMMAR_RULES["__START__"],
+      apres_Nom: grammarConfig.GRAMMAR_RULES["Nom"],
+      apres_Adjectif: grammarConfig.GRAMMAR_RULES["Adjectif"],
+      apres_Temps: grammarConfig.GRAMMAR_RULES["Temps"],
+      apres_Marqueur: grammarConfig.GRAMMAR_RULES["Marqueur"],
+      apres_Verbe_Transitif: grammarConfig.GRAMMAR_RULES["Verbe (Transitif)"],
+      apres_Particule_finale: grammarConfig.GRAMMAR_RULES["Particule finale"],
+      toutes_les_categories: Object.keys(grammarConfig.CAT_COLORS),
+      nombre_de_mots_dans_le_lexique: lexicon.length
+    };
+    box.textContent = JSON.stringify(info, null, 2);
+    box.style.display = "block";
+  }
+
+  function resetStorage() {
+    if (confirm("Vider le cache local (lexique, phrases et règles) ? Tes fichiers exportés ne sont pas affectés.")) {
+      localStorage.removeItem(LEX_KEY); localStorage.removeItem(PHRASES_KEY); localStorage.removeItem(GRAMMAR_KEY);
+      lexicon = []; savedPhrases = []; grammarConfig = DEFAULT_GRAMMAR;
+      idbDel("lexicon").catch(() => {});
+      renderAll();
+    }
+  }
+
+
+  // ===== Stockage durable du lexique (IndexedDB) =====
+  function idbOpen() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open("thai_hub", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  async function idbGet(k) { const db = await idbOpen(); return new Promise((res, rej) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+  async function idbSet(k, v) { const db = await idbOpen(); return new Promise((res, rej) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); }
+  async function idbDel(k) { const db = await idbOpen(); return new Promise((res, rej) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").delete(k); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); }
+  let _persistTimer = null, _persistOk = null;
+  function persistLexicon() {
+    clearTimeout(_persistTimer);
+    _persistTimer = setTimeout(() => {
+      idbSet("lexicon", lexicon).then(() => { _persistOk = true; updateStorageState(); }).catch(() => { _persistOk = false; updateStorageState(); });
+    }, 300);
+  }
+  async function loadLexiconFromDB() {
+    try { const v = await idbGet("lexicon"); if (Array.isArray(v) && v.length) { lexicon = v; _persistOk = true; } } catch (e) { _persistOk = false; }
+  }
+  function updateStorageState() {
+    const el = document.getElementById("storage-state");
+    if (!el) return;
+    el.textContent = _persistOk === false
+      ? "⚠️ Ce navigateur ne garde pas le lexique entre deux ouvertures : exporte-le régulièrement."
+      : `✅ Lexique gardé dans cet appareil (${lexicon.length} entrées). Il se recharge tout seul à l'ouverture.`;
+  }
+
+  // ===== Import de fichiers (reconnaissance automatique) =====
+  function mergeAny(data, counts) {
+    if (Array.isArray(data)) {
+      if (data.length === 0) return;
+      if (data.some(x => x && Array.isArray(x.tokens))) { mergePhrases(data); counts.phrases += data.length; }
+      else if (data.some(x => x && x.thai && x.cat)) { const st = mergeLexicon(data); counts.lexAdded += st.added; counts.lexUpdated += st.updated; counts.lexSkipped += st.skipped; }
+      else counts.ignores++;
+    } else if (data && typeof data === "object") {
+      let used = false;
+      if (data.GRAMMAR_RULES) { if (mergeGrammar(data)) counts.grammaire++; used = true; }
+      if (Array.isArray(data.lexique)) { const st = mergeLexicon(data.lexique); counts.lexAdded += st.added; counts.lexUpdated += st.updated; counts.lexSkipped += st.skipped; used = true; }
+      if (Array.isArray(data.phrases)) { mergePhrases(data.phrases); counts.phrases += data.phrases.length; used = true; }
+      if (data.grammaire && data.grammaire.GRAMMAR_RULES) { if (mergeGrammar(data.grammaire)) counts.grammaire++; used = true; }
+      if (typeof data.profil === "string" && data.profil.trim()) {
+        try { localStorage.setItem(PROFILE_KEY, data.profil); } catch (e) { /* ignore */ }
+        document.getElementById("profile-text").value = data.profil; counts.profil = true; used = true;
+      }
+      if (!used) counts.ignores++;
+    } else counts.ignores++;
+  }
+  document.getElementById("fileInput").addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files);
+    const counts = { lexAdded: 0, lexUpdated: 0, lexSkipped: 0, phrases: 0, grammaire: 0, ignores: 0, profil: false };
+    for (const f of files) {
+      try { mergeAny(JSON.parse(await f.text()), counts); }
+      catch (err) { console.error("Lecture impossible", f.name, err); counts.ignores++; }
+    }
+    saveAll(); renderAll();
+    showToast(`Lexique : ${counts.lexAdded} nouveau(x), ${counts.lexUpdated} mis à jour${counts.lexSkipped ? ", " + counts.lexSkipped + " conservés" : ""} · ${counts.phrases} phrases · ${counts.grammaire} règles${counts.profil ? " · fiche d'apprentissage" : ""}${counts.ignores ? " · " + counts.ignores + " fichier(s) non reconnu(s)" : ""}`);
+    e.target.value = "";
+    updateStorageState();
+  });
+  function exportAll() {
+    downloadJSON({ version: 1, exportedAt: new Date().toISOString(), lexique: lexicon, phrases: savedPhrases, grammaire: grammarConfig, profil: getProfileText() }, "thai_tout_" + dateStamp() + ".json");
+  }
+
+  // ===== Lecteur : découpe un texte thaï et relie chaque mot au lexique =====
+  const READER_KEY = "thai_reader_text_v1";
+  let readerTokens = [], readerSel = -1;
+  const THAI_RE = /[฀-๿]/;
+
+  function segmentThai(text) {
+    const out = [];
+    if (typeof Intl !== "undefined" && Intl.Segmenter) {
+      for (const sg of new Intl.Segmenter("th", { granularity: "word" }).segment(text)) out.push({ t: sg.segment, w: !!sg.isWordLike });
+    } else {
+      text.split(/([฀-๿]+)/).forEach(p => { if (p) out.push({ t: p, w: THAI_RE.test(p) }); });
+    }
+    return out;
+  }
+  function analyzeText(text) {
+    const idx = new Map();
+    lexicon.forEach(w => { const k = normThai(w.thai); if (!idx.has(k)) idx.set(k, []); idx.get(k).push(w); });
+    const segs = segmentThai(normThai(text));
+    const toks = [];
+    for (let i = 0; i < segs.length; ) {
+      const sg = segs[i];
+      if (!sg.w || !THAI_RE.test(sg.t)) { toks.push({ t: sg.t, plain: true }); i++; continue; }
+      let done = false;
+      for (let n = Math.min(8, segs.length - i); n >= 1 && !done; n--) {
+        let ok = true, cand = "";
+        for (let k = 0; k < n; k++) { const q = segs[i + k]; if (!q.w || !THAI_RE.test(q.t)) { ok = false; break; } cand += q.t; }
+        if (!ok) continue;
+        const ent = idx.get(cand);
+        if (ent) { toks.push({ t: cand, entries: ent }); i += n; done = true; }
+      }
+      if (!done) {
+        // Repli sans découpeur : plus long mot du lexique en tête de chaîne
+        let piece = sg.t, best = "";
+        if (!(typeof Intl !== "undefined" && Intl.Segmenter)) {
+          for (let L = Math.min(piece.length, 20); L >= 1; L--) { if (idx.has(piece.slice(0, L))) { best = piece.slice(0, L); break; } }
+        }
+        if (best) { toks.push({ t: best, entries: idx.get(best) }); const rest = piece.slice(best.length); if (rest) segs.splice(i + 1, 0, { t: rest, w: true }); }
+        else toks.push({ t: sg.t, entries: null });
+        i++;
+      }
+    }
+    return toks;
+  }
+  function analyzeReader() {
+    const text = document.getElementById("reader-text").value;
+    if (!text.trim()) return;
+    readerTokens = analyzeText(text); readerSel = -1;
+    renderReader();
+    document.getElementById("reader-detail").innerHTML = "";
+  }
+  function renderReader() {
+    const box = document.getElementById("reader-out");
+    box.classList.toggle("gloss-on", document.getElementById("reader-gloss").checked);
+    box.innerHTML = readerTokens.map((tk, i) => {
+      if (tk.plain) return /^\s+$/.test(tk.t) && !/\n/.test(tk.t) ? " " : esc(tk.t).replace(/\n/g, "<br>");
+      const known = tk.entries && tk.entries.length;
+      const color = known ? (grammarConfig.CAT_COLORS[tk.entries[0].cat] || "#38bdf8") : "";
+      const g = known ? (glossList(tk.entries[0])[0] || "") : "?";
+      return `<span class="rw ${known ? "known" : "unk"}${i === readerSel ? " sel" : ""}" ${known ? `style="border-bottom-color:${color}"` : ""} onclick="readerSelect(${i})"><span class="rt">${esc(tk.t)}</span><span class="rg">${esc(g)}</span></span>`;
+    }).join("");
+    const words = readerTokens.filter(t => !t.plain);
+    const unk = words.filter(t => !t.entries || !t.entries.length);
+    const st = document.getElementById("reader-stats");
+    st.textContent = words.length ? `${words.length} mots · ${words.length - unk.length} dans ton lexique · ${unk.length} inconnus (soulignés en rouge)` : "";
+    document.getElementById("reader-actions").style.display = words.length ? "flex" : "none";
+  }
+  function readerContext(i) {
+    let a = i, b = i;
+    const stop = t => t.plain && /\n/.test(t.t);
+    while (a > 0 && i - a < 14 && !stop(readerTokens[a - 1])) a--;
+    while (b < readerTokens.length - 1 && b - i < 14 && !stop(readerTokens[b + 1])) b++;
+    return readerTokens.slice(a, b + 1).map(t => t.t).join("").trim();
+  }
+  function entryHTML(e) {
+    const color = grammarConfig.CAT_COLORS[e.cat] || "#666";
+    const g = glossList(e);
+    const short = g[0] ? g[0] + (g.length > 1 ? " (" + g.slice(1).join(" / ") + ")" : "") : "";
+    const full = e.sens && e.sens.trim() !== short.trim() ? `<div class="more" style="margin-top:6px; color:var(--muted); font-size:13px; line-height:1.4;">${esc(e.sens)}</div>` : "";
+    const note = e.note ? `<div style="margin-top:6px; color:var(--muted); font-size:13px;"><em>${esc(e.note)}</em></div>` : "";
+    return `<div class="entry"><span class="badge" style="background:${color}">${esc(e.cat)}</span> <strong>${esc(e.rom)}</strong> - ${esc(short)}${full}${note}</div>`;
+  }
+  function readerSelect(i) {
+    readerSel = i; renderReader();
+    const tk = readerTokens[i], box = document.getElementById("reader-detail");
+    const head = `<div style="font-size:26px; margin:10px 0 4px;">${esc(tk.t)}</div>`;
+    const toneB = `<div style="margin:8px 0;"><button onclick="toneForReader(${i})">🔊 Pourquoi ce ton ?</button> <button class="secondary" onclick="toneForReaderAll()">🔊 Tout le texte</button></div>`;
+    if (tk.entries && tk.entries.length) { box.innerHTML = head + tk.entries.map(entryHTML).join("") + toneB; return; }
+    box.innerHTML = head + `<p style="color:var(--muted); margin-bottom:10px;">Ce mot n'est pas dans ton lexique (ou le découpage l'a coupé). Tu peux demander sa fiche à Claude, en lui donnant la phrase d'où il vient.</p><button class="claude-btn" onclick="askClaudeUnknown(${i})">🤖 Demander ce mot à Claude</button>` + toneB;
+  }
+  function askClaudeUnknown(i) {
+    const w = normThai(readerTokens[i].t);
+    copyText(buildWordPrompt([w], { [w]: readerContext(i) }), "Demande copiée ! Colle-la dans Claude, puis reviens ici avec « Coller la réponse ».");
+  }
+  function askClaudeUnknownAll() {
+    const seen = new Set(), words = [], ctx = {};
+    readerTokens.forEach((t, i) => {
+      if (t.plain || (t.entries && t.entries.length)) return;
+      const w = normThai(t.t);
+      if (seen.has(w) || /^[๐-๙\d]+$/.test(w)) return;
+      seen.add(w); words.push(w); ctx[w] = readerContext(i);
+    });
+    if (!words.length) { showToast("Aucun mot inconnu dans ce texte."); return; }
+    const used = words.slice(0, 25);
+    copyText(buildWordPrompt(used, ctx), used.length < words.length ? `Demande copiée pour 25 mots sur ${words.length}. Refais l'analyse ensuite pour les suivants.` : `Demande copiée (${used.length} mots) ! Colle-la dans Claude.`);
+  }
+  function askClaudeTranslate() {
+    const text = document.getElementById("reader-text").value.trim();
+    if (!text) return;
+    copyText(`${getProfileText()}
+
+DEMANDE : explique-moi ce texte thaï.
+${text.slice(0, 3000)}
+
+Réponds en trois parties courtes :
+1. Sens général en une ou deux phrases.
+2. Traduction française naturelle, phrase par phrase.
+3. Les deux ou trois points de grammaire ou de vocabulaire les plus difficiles pour moi, avec un mot à mot.`, "Demande copiée ! Colle-la dans Claude.");
+  }
+  function saveReaderDraft() { try { localStorage.setItem(READER_KEY, document.getElementById("reader-text").value); } catch (e) { /* ignore */ } }
+  function clearReader() {
+    document.getElementById("reader-text").value = ""; readerTokens = []; readerSel = -1; saveReaderDraft();
+    renderReader(); document.getElementById("reader-detail").innerHTML = "";
+  }
+
+  function showToast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
+
+  /* ===== moteur de tons ===== */
+
+// ===== Moteur de tons thaï : découpe un mot en syllabes, calcule le ton par les règles, l'explique =====
+const ThaiTone = (() => {
+  const MID = "กจดตบปอฎฏ", HIGH = "ขฃฉถฐผฝศษสห", LOW = "คฅฆงชซฌญฑฒณทธนพฟภมยรลวฬฮ";
+  const cls = c => MID.includes(c) ? "moy" : HIGH.includes(c) ? "hte" : LOW.includes(c) ? "bas" : null;
+  const isC = c => !!c && c >= "ก" && c <= "ฮ";
+  const FIN = {};
+  const setFin = (k, str) => { for (const c of str) FIN[c] = k; };
+  setFin("k", "กขฃคฅฆ"); setFin("t", "จฉชซฌฎฏฐฑฒดตถทธศษส"); setFin("p", "บปพฟภ");
+  setFin("n", "ญณนรลฬ"); setFin("m", "ม"); setFin("ng", "ง"); setFin("y", "ย"); setFin("w", "ว");
+  const DEAD = { k: 1, t: 1, p: 1 };
+  const UP = "ัิีึืุู็", TONE = "่้๊๋", LEAD = "เแโใไ", POSTV = "ะาำ";
+  const vowelish = c => !!c && (UP.includes(c) || TONE.includes(c) || POSTV.includes(c));
+  const HONAM = "งญนมยรลว";
+  const SON = "งญนมยรลว";
+  const LEADERS = "กจดตบปฎฏขฃฉถฐผฝศษสอ";
+  const CLUSTER = new Set("กร กล กว ขร ขล ขว คร คล คว ตร ปร ปล พร พล ผล ฟร ฟล บร บล ดร".split(" "));
+  const SILENT_R = new Set("ทร จร ศร สร ซร".split(" "));
+  const AO = ["อย่า", "อยู่", "อยาก", "อย่าง"];
+  const NAMES = { "ก": "กอ ไก่", "ข": "ขอ ไข่", "ฃ": "ขอ ขวด", "ค": "คอ ควาย", "ฅ": "คอ คน", "ฆ": "คอ ระฆัง", "ง": "งอ งู", "จ": "จอ จาน", "ฉ": "ฉอ ฉิ่ง", "ช": "ชอ ช้าง", "ซ": "ซอ โซ่", "ฌ": "ชอ เฌอ", "ญ": "ยอ หญิง", "ฎ": "ดอ ชฎา", "ฏ": "ตอ ปฏัก", "ฐ": "ถอ ฐาน", "ฑ": "ทอ มณโฑ", "ฒ": "ทอ ผู้เฒ่า", "ณ": "นอ เณร", "ด": "ดอ เด็ก", "ต": "ตอ เต่า", "ถ": "ถอ ถุง", "ท": "ทอ ทหาร", "ธ": "ทอ ธง", "น": "นอ หนู", "บ": "บอ ใบไม้", "ป": "ปอ ปลา", "ผ": "ผอ ผึ้ง", "ฝ": "ฝอ ฝา", "พ": "พอ พาน", "ฟ": "ฟอ ฟัน", "ภ": "พอ สำเภา", "ม": "มอ ม้า", "ย": "ยอ ยักษ์", "ร": "รอ เรือ", "ล": "ลอ ลิง", "ว": "วอ แหวน", "ศ": "สอ ศาลา", "ษ": "สอ ฤๅษี", "ส": "สอ เสือ", "ห": "หอ หีบ", "ฬ": "ลอ จุฬา", "อ": "ออ อ่าง", "ฮ": "ฮอ นกฮูก" };
+
+  // --- nettoyage : ์ (muet), รร, ๆ ฯ ---
+  function expandRepeat(word) {
+    const toks = (word || "").split(/\s+/).filter(Boolean), out = [];
+    for (const t of toks) {
+      if (t === "ๆ") { if (out.length) out.push(out[out.length - 1]); continue; }
+      if (t.includes("ๆ")) { const b = t.slice(0, t.indexOf("ๆ")); out.push(b, b); const rest = t.slice(t.indexOf("ๆ") + 1); if (rest) out.push(rest); continue; }
+      out.push(t);
+    }
+    return out.join("");
+  }
+  function clean(word) {
+    let s = expandRepeat(word).normalize("NFC").replace(/ํา/g, "ำ").replace(/[ๆฯ\s]/g, "");
+    s = s.replace(/[^\u0E00-\u0E7F]/g, "");
+    let a = Array.from(s), out = [];
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] === "์") {
+        // supprime la consonne muette (et sa voyelle) qui précède
+        if (out.length && "ิีึืุู".includes(out[out.length - 1])) out.pop();
+        if (out.length && isC(out[out.length - 1])) {
+          const c = out.pop();
+          if (c === "ร" && out.length >= 2 && "ทตศษส".includes(out[out.length - 1]) && isC(out[out.length - 2])) out.pop();
+        }
+        continue;
+      }
+      out.push(a[i]);
+    }
+    s = out.join("");
+    // รร : -รร + finale = ั ; sinon = ัน
+    s = s.replace(/รร([ก-ฮ])/g, "ั$1").replace(/รร/g, "ัน");
+    s = s.replace(/([ตกท])ร$/, "$1");
+    return s;
+  }
+
+  // --- options d'initiale à la position j ---
+  function initials(s, j, lead) {
+    const c1 = s[j], c2 = s[j + 1], res = [];
+    res.push({ len: 1, chars: c1, eff: cls(c1), kind: "simple", pen: 0 });
+    if (c1 === "ห" && c2 && HONAM.includes(c2)) res.push({ len: 2, chars: c1 + c2, eff: "hte", kind: "honam", pen: -1 });
+    if (c1 === "อ" && c2 === "ย") { const rest = s.slice(j); if (AO.some(w => rest.startsWith(w))) res.push({ len: 2, chars: "อย", eff: "moy", kind: "aonam", pen: -1 }); }
+    if (c2) {
+      const pair = c1 + c2, nx = s[j + 2];
+      const vow = vowelish(nx);
+      if (CLUSTER.has(pair)) {
+        const ok = c2 === "ว" ? vow : (vow || !!lead || isC(nx) || !nx);
+        if (ok) res.push({ len: 2, chars: pair, eff: cls(c1), kind: "cluster", pen: 0.5 });
+      }
+      if (SILENT_R.has(pair) && (vow || !!lead || isC(nx) || !nx)) res.push({ len: 2, chars: pair, eff: cls(c1), kind: "rmuet", pen: -1 });
+    }
+    return res;
+  }
+
+  const RARE_FIN = "ซศษสฉชฌฑฒธภฟฆฅฃฐผ";
+  const finalOK = (s, q) => isC(s[q]) && FIN[s[q]] && !vowelish(s[q + 1]);
+  const finPen = c => (c && RARE_FIN.includes(c)) ? 0.8 : 0;
+
+  // --- options "reste de syllabe" après l'initiale ---
+  function rests(s, k, lead) {
+    const out = [];
+    let p = k, up = null, mark = null;
+    if (UP.includes(s[p])) { up = s[p]; p++; }
+    if (TONE.includes(s[p])) { mark = s[p]; p++; }
+    const push = (v, end, fin, pen) => out.push({ v, up, mark, end, fin: fin || null, pen: (pen || 0) + finPen(fin) + ((v.inherent && !fin && end >= s.length) ? 8 : 0) });
+    const withFinal = (v, end, optional, pen) => {
+      if (optional) push(v, end, null, pen);
+      if (finalOK(s, end)) push(v, end + 1, s[end], pen);
+    };
+    const nx = s[p];
+    if (!lead) {
+      if (!up) {
+        if (nx === "ะ") push({ long: false, g: "ะ" }, p + 1);
+        else if (nx === "า") withFinal({ long: true, g: "า" }, p + 1, true);
+        else if (nx === "ำ") push({ long: false, g: "ำ", live: true }, p + 1);
+        else {
+          if (nx === "อ") withFinal({ long: true, g: "อ" }, p + 1, true);
+          if (nx === "ว" && !vowelish(s[p + 1]) && !(mark && false)) withFinal({ long: true, g: "ัว (-ว-)" }, p + 1, true);
+          if (finalOK(s, p)) push({ long: false, g: "∅ (o)", inherent: true }, p + 1, s[p], 0);
+          push({ long: false, g: "∅ (a)", inherent: true }, p, null, (SON.includes(s[p]) && LEADERS.includes(s[k - 1])) ? 0.3 : 1.5);
+        }
+      } else if (up === "ั") {
+        if (nx === "ว" && !vowelish(s[p + 1])) { if (s[p + 1] === "ะ") push({ long: false, g: "ัวะ" }, p + 2); else push({ long: true, g: "ัว" }, p + 1); }
+        else if (finalOK(s, p)) push({ long: false, g: "ั" }, p + 1, s[p]);
+      } else if (up === "ิ") withFinal({ long: false, g: "ิ" }, p, true);
+      else if (up === "ี") withFinal({ long: true, g: "ี" }, p, true);
+      else if (up === "ึ") withFinal({ long: false, g: "ึ" }, p, true);
+      else if (up === "ื") { if (nx === "อ") push({ long: true, g: "ือ" }, p + 1); else withFinal({ long: true, g: "ื" }, p, true); }
+      else if (up === "ุ") withFinal({ long: false, g: "ุ" }, p, true);
+      else if (up === "ู") withFinal({ long: true, g: "ู" }, p, true);
+      else if (up === "็") { if (nx === "อ") withFinal({ long: false, g: "็อ" }, p + 1, true); else push({ long: false, g: "็", exc: "ก็" }, p); }
+    } else if (lead === "เ") {
+      if (up === "ี" && nx === "ย") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-ียะ" }, p + 2); else withFinal({ long: true, g: "เ-ีย" }, p + 1, true); }
+      else if (up === "ื" && nx === "อ") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-ือะ" }, p + 2); else withFinal({ long: true, g: "เ-ือ" }, p + 1, true); }
+      else if (up === "ิ") withFinal({ long: true, g: "เ-ิ-" }, p, true);
+      else if (up === "็") { if (finalOK(s, p)) push({ long: false, g: "เ-็-" }, p + 1, s[p]); }
+      else if (!up) {
+        if (nx === "ะ") push({ long: false, g: "เ-ะ" }, p + 1);
+        else if (nx === "า") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-าะ" }, p + 2); else push({ long: false, g: "เ-า", live: true }, p + 1); }
+        else if (nx === "อ") { if (s[p + 1] === "ะ") push({ long: false, g: "เ-อะ" }, p + 2); else withFinal({ long: true, g: "เ-อ" }, p + 1, true); }
+        else withFinal({ long: true, g: "เ-" }, p, true);
+      }
+    } else if (lead === "แ") {
+      if (up === "็") { if (finalOK(s, p)) push({ long: false, g: "แ-็-" }, p + 1, s[p]); }
+      else if (!up) { if (nx === "ะ") push({ long: false, g: "แ-ะ" }, p + 1); else withFinal({ long: true, g: "แ-" }, p, true); }
+    } else if (lead === "โ") {
+      if (!up) { if (nx === "ะ") push({ long: false, g: "โ-ะ" }, p + 1); else withFinal({ long: true, g: "โ-" }, p, true); }
+    } else if (lead === "ไ" || lead === "ใ") {
+      if (!up) withFinal({ long: false, g: lead + "-", live: true }, p, true);
+    }
+    return out;
+  }
+
+  function parseAt(s, i) {
+    const res = [];
+    let j = i, lead = null;
+    if (LEAD.includes(s[j])) { lead = s[j]; j++; }
+    if (!isC(s[j])) return res;
+    for (const ini of initials(s, j, lead)) {
+      for (const r of rests(s, j + ini.len, lead)) {
+        const base = { start: i, end: r.end, lead, ini, v: r.v, up: r.up, mark: r.mark, fin: r.fin, cost: 1 + ini.pen + r.pen };
+        res.push(base);
+        if (r.fin && r.end < s.length && !lead && r.v.g !== "∅ (o)") res.push({ ...base, link: true, cost: base.cost + 2.5 });
+      }
+    }
+    return res;
+  }
+
+  // --- segmentation optimale (guidée par le nombre de syllabes attendu) ---
+  function segment(s, expected) {
+    const n = s.length, memo = new Map();
+    const cache = new Map();
+    const opts = i => { if (!cache.has(i)) cache.set(i, parseAt(s, i)); return cache.get(i); };
+    function solve(i, r) {
+      if (i === n) return r === 0 || r === null ? { cost: 0, syls: [] } : null;
+      if (r !== null && r <= 0) return null;
+      const key = i + "," + r;
+      if (memo.has(key)) return memo.get(key);
+      let best = null;
+      for (const o of opts(i)) {
+        const w = o.link ? 2 : 1;
+        if (r !== null && r < w) continue;
+        const rest = solve(o.end, r === null ? null : r - w);
+        if (!rest) continue;
+        const c = o.cost + rest.cost;
+        if (!best || c < best.cost) best = { cost: c, syls: [o].concat(rest.syls) };
+      }
+      memo.set(key, best);
+      return best;
+    }
+    const free = solve(0, null);
+    let sol = expected ? solve(0, expected) : null, guided = !!sol;
+    if (sol && free && sol.cost - free.cost > 4) { sol = free; guided = false; }
+    if (!sol) { sol = free; guided = false; }
+    return sol ? { syls: sol.syls, guided, cost: sol.cost } : null;
+  }
+
+  function enumParses(s, expected, bound) {
+    const n = s.length, cache = new Map(), out = [];
+    const opts = i => { if (!cache.has(i)) cache.set(i, parseAt(s, i)); return cache.get(i); };
+    const dead = new Map();
+    function minCost(i, r) { // meilleur coût restant (mémoïsé)
+      const key = i + "," + r;
+      if (dead.has(key)) return dead.get(key);
+      let b = Infinity;
+      if (i === n) b = r === 0 ? 0 : Infinity;
+      else if (r > 0) for (const o of opts(i)) { const w = o.link ? 2 : 1; if (r < w) continue; const c = o.cost + minCost(o.end, r - w); if (c < b) b = c; }
+      dead.set(key, b); return b;
+    }
+    const best = minCost(0, expected);
+    if (!isFinite(best)) return [];
+    const lim = best + bound;
+    (function go(i, r, acc, cost) {
+      if (out.length >= 400) return;
+      if (i === n) { if (r === 0) out.push({ syls: acc.slice(), cost }); return; }
+      for (const o of opts(i)) {
+        const w = o.link ? 2 : 1; if (r < w) continue;
+        const c = cost + o.cost; if (c + minCost(o.end, r - w) > lim) continue;
+        acc.push(o); go(o.end, r - w, acc, c); acc.pop();
+      }
+    })(0, expected, [], 0);
+    return out;
+  }
+
+  // --- ton ---
+  const T = { mid: "moyen", low: "bas", fall: "descendant", high: "haut", rise: "montant" };
+  const MARKS = { "่": "ไม้เอก ่", "้": "ไม้โท ้", "๊": "ไม้ตรี ๊", "๋": "ไม้จัตวา ๋" };
+  const CLASS_FR = { moy: "moyenne", hte: "haute", bas: "basse" };
+
+  function analyzeSyl(sy, s) {
+    const text = sy.linked ? sy.ini.chars : s.slice(sy.start, sy.end);
+    const fk = sy.fin ? FIN[sy.fin] : null;
+    const live = !!sy.v.live || (fk && !DEAD[fk]) || (sy.v.long && !sy.fin) || (sy.fin && !DEAD[fk]);
+    const type = live ? "vivante" : (sy.v.long ? "morte longue" : "morte courte");
+    const eff = sy.ini.eff, mark = sy.mark;
+    let tone, rule, invisible = null;
+    if (sy.v.exc === "ก็") { tone = "fall"; rule = "Mot-outil à retenir : ก็ se lit avec un ton descendant, même si la règle donnerait un ton bas."; }
+    else if (mark) {
+      const m = MARKS[mark];
+      if (mark === "๊" || mark === "๋") {
+        tone = mark === "๊" ? "high" : "rise";
+        rule = `${m} = ton ${T[tone]}` + (eff === "moy" ? " (ce signe ne s'écrit que sur la classe moyenne)." : " — signe inhabituel sur cette classe, à vérifier.");
+      } else if (mark === "่") { tone = eff === "bas" ? "fall" : "low"; rule = `Classe ${CLASS_FR[eff]} + ${m} = ton ${T[tone]}.`; }
+      else { tone = eff === "bas" ? "high" : "fall"; rule = `Classe ${CLASS_FR[eff]} + ${m} = ton ${T[tone]}` + (eff === "bas" ? " (piège classique : comme dans น้ำ)." : "."); }
+    } else if (live) {
+      tone = eff === "hte" ? "rise" : "mid";
+      rule = eff === "hte" ? "Classe haute + syllabe vivante sans signe = ton montant." : `Classe ${CLASS_FR[eff]} + syllabe vivante sans signe = ton moyen.`;
+    } else if (eff === "bas") {
+      if (sy.v.long) { tone = "fall"; rule = "Classe basse + syllabe morte longue sans signe = ton descendant."; invisible = "อ่ (ไม้เอก)"; }
+      else { tone = "high"; rule = "Classe basse + syllabe morte courte sans signe = ton haut."; invisible = "อ้ (ไม้โท)"; }
+    } else { tone = "low"; rule = `Classe ${CLASS_FR[eff]} + syllabe morte sans signe = ton bas.`; invisible = "อ่ (ไม้เอก)"; }
+    const MN = { "่": "ไม้เอก (่)", "้": "ไม้โท (้)", "๊": "ไม้ตรี (๊)", "๋": "ไม้จัตวา (๋)" };
+    const state = mark ? MN[mark] : (live ? "vivante" : (eff === "bas" ? type : "morte"));
+    const formula = sy.v.exc === "ก็" ? "ก็ = descendant (exception)" : `${CLASS_FR[eff]} + ${state} = ${T[tone]}`;
+    return { text, formula, linked: !!sy.linked, repeated: !!sy.repeated, tone, type, rule, invisible, eff, ini: sy.ini, lead: sy.lead, vowel: sy.v, fin: sy.fin, fk, mark, live };
+  }
+
+  // --- rom : tons lus dans la romanisation (diacritiques) ---
+  function romSyllables(rom) {
+    return (rom || "").split(/[\s\-·]+/).map(x => x.replace(/[(),.;:!?]/g, "")).filter(x => /\p{L}/u.test(x));
+  }
+  function romTone(syl) {
+    const d = syl.normalize("NFD");
+    if (/\u0300/.test(d)) return "low";
+    if (/\u0302/.test(d)) return "fall";
+    if (/\u0301/.test(d)) return "high";
+    if (/[\u030C\u0306]/.test(d)) return "rise";
+    return "mid";
+  }
+  const hasBreve = rom => /[\u0306]/.test((rom || "").normalize("NFD"));
+
+  const EXC = ["ประโยค","ประโยชน์","ตำรวจ","สำรวจ","บริ","ศุลกากร","ซอส","พาสต้า","ช็อค","ตู้เซฟ","จากุซซี่","อพาร์ต","แอปเปิล","บัส","โฮสเทล","โปสการ์ด","พาสปอร์ต","เต็นท์","แจ็กเก็ต","ฤ","สัปดาห์","ผลไม้","ขณะ","เอกสาร","เหตุ","เมล็ด","เกษียณ","อุปกรณ์","ภรรยา","กรกฎาคม","วัฒนธรรม","ธรรมชาติ","รัฐบาล","นิรโทษ","พฤติ","อัยการ","พิจารณา","แผนก","ตลอด","เสมอ","แสดง","มลภาวะ","มาตรการ","ศัลย","สมุทร","เทศบาล","สถานการณ์","รสชาติ","เทศกาล","อาชญา","พยาบาล","สวรรค์","สรรพ","ศิลปะ","ยานพาหนะ","แมลง","แสตมป์","กาญจน","สนทนา","สภา","อากร","เกษตร","สมอง","สาธารณะ","โรงพยาบาล","แบตเตอรี่","มังสวิรัติ","ชีพจร","ปฏิบัติ","จราจร","ธุรกิจ","กุมาร","ฆาตกร","บริกร","แคลอรี่","เภสัช","ผู้บริ","นรี","ประสาท","เวช","รังสี","ตึกระฟ้า","ข้อเสนอแนะ","ภาวะ"];
+  const ORTHO = { "เหตุ": "เหต", "สามารถ": "สามาด" };
+
+  function expandLinks(list) {
+    const out = [];
+    list.forEach(o => {
+      out.push(o);
+      if (o.link) out.push({ start: o.end, end: o.end, lead: null, ini: { len: 0, chars: o.fin, eff: cls(o.fin), kind: "lien", pen: 0 }, v: { long: false, g: "∅ (a)", inherent: true }, up: null, mark: null, fin: null, linked: true, cost: 0 });
+    });
+    return out;
+  }
+
+  function finish(sylsRaw, s, romSyl) {
+    const raw = expandLinks(sylsRaw);
+    raw.forEach((x, i) => {
+      const nx = raw[i + 1];
+      if (!nx || x.linked || x.v.g !== "∅ (a)" || x.ini.kind !== "simple" || !LEADERS.includes(x.ini.chars)) return;
+      if (nx.ini.kind !== "simple" || !SON.includes(nx.ini.chars)) return;
+      const lead = { ...nx.ini, eff: cls(x.ini.chars), kind: "aksonnam", leader: x.ini.chars };
+      let useLeader = x.ini.chars !== "อ";
+      if (romSyl && romSyl.length === raw.length) {
+        const tL = analyzeSyl({ ...nx, ini: lead }, s).tone, tN = analyzeSyl(nx, s).tone, rt = romTone(romSyl[i + 1]);
+        if (tL !== tN) useLeader = (rt === tL) ? true : (rt === tN ? false : useLeader);
+      }
+      if (useLeader) nx.ini = lead;
+    });
+    return raw.map(x => analyzeSyl(x, s));
+  }
+
+  function analyze(thai, rom) {
+    let src = thai || "";
+    Object.keys(ORTHO).forEach(k => { src = src.split(k).join(ORTHO[k]); });
+    const romSyl = romSyllables(rom);
+    const expected = romSyl.length || null;
+    let seg, s;
+    if (src.includes("ๆ")) {
+      const cut = clean(src.slice(0, src.indexOf("ๆ"))).length;
+      s = clean(src.replace(/ๆ/g, ""));
+      let found = null;
+      for (let k = 1; k <= 3 && !found; k++) {
+        const sg = segment(s, expected ? expected - k : null);
+        if (!sg || (expected && !sg.guided)) continue;
+        const idx = sg.syls.findIndex(o => o.end === cut);
+        if (idx >= k - 1) found = { sg, idx, k };
+      }
+      if (!found) { const sg = segment(s, null); const idx = sg ? sg.syls.findIndex(o => o.end === cut) : -1; if (idx >= 0) found = { sg, idx, k: 1 }; }
+      if (!found) return { thai, ok: false, reason: "Découpage impossible." };
+      const a = found.sg.syls.slice(0, found.idx + 1), rp = a.slice(a.length - found.k);
+      seg = { ...found.sg, syls: a.concat(rp.map(o => ({ ...o, repeated: true })), found.sg.syls.slice(found.idx + 1)) };
+    } else {
+      s = clean(src);
+      if (!s) return null;
+      seg = segment(s, expected);
+    }
+    if (!seg) return { thai, ok: false, reason: "Découpage impossible (mot rare, emprunt ou forme non prévue)." };
+    let syls = finish(seg.syls, s, romSyl);
+    if (expected && !src.includes("ๆ") && syls.length === expected && !syls.every((x, i) => romTone(romSyl[i]) === x.tone)) {
+      let bestS = syls, bestN = syls.filter((x, i) => romTone(romSyl[i]) === x.tone).length;
+      for (const p of enumParses(s, expected, 3.5)) {
+        const cand = finish(p.syls, s, romSyl);
+        if (cand.length !== expected) continue;
+        const nOk = cand.filter((x, i) => romTone(romSyl[i]) === x.tone).length;
+        if (nOk > bestN) { bestN = nOk; bestS = cand; if (nOk === expected) break; }
+      }
+      syls = bestS;
+    }
+    const res = { thai, cleaned: s, ok: true, syls, guided: seg.guided, expected, romSyl };
+    if (romSyl.length) {
+      res.countMatch = romSyl.length === syls.length;
+      if (res.countMatch) {
+        syls.forEach((sy, i) => { sy.romSyl = romSyl[i]; sy.romTone = romTone(romSyl[i]); sy.match = sy.romTone === sy.tone; });
+        res.match = syls.every(x => x.match);
+      } else res.match = false;
+    }
+    res.breve = hasBreve(rom);
+    if (romSyl.length && !res.match) { const k = EXC.find(k => (thai || "").includes(k)); if (k) res.exception = k; }
+    return res;
+  }
+
+  return { analyze, clean, romSyllables, romTone, cls, NAMES, T, CLASS_FR, MARKS, FIN };
+})();
+
+  
+
+  /* ===== v11 : Pourquoi ce ton ? ===== */
+  const TONE_COL = { mid: "#94a3b8", low: "#60a5fa", fall: "#f87171", high: "#fbbf24", rise: "#34d399" };
+  const TONE_EX = { mid: "a", low: "à", fall: "â", high: "á", rise: "ǎ" };
+  let toneItems = [], toneTest = false, toneAnswered = {};
+  function iniText(sy) {
+    const i = sy.ini, N = ThaiTone.NAMES, c = ThaiTone.CLASS_FR[sy.eff];
+    if (i.kind === "honam") return `<b>${i.chars}</b> : ห นำ. Le ห ne se prononce pas, il donne sa classe <b>haute</b> à ${i.chars[1]} (${N[i.chars[1]]}).`;
+    if (i.kind === "aonam") return `<b>อย</b> : อ นำ. Le อ ne se prononce pas, il donne sa classe <b>moyenne</b> à ย (cas : อย่า, อยู่, อยาก, อย่าง).`;
+    if (i.kind === "aksonnam") return `<b>${i.chars}</b> (${N[i.chars]}) prend la classe <b>${c}</b> de la consonne meneuse <b>${i.leader}</b> (${N[i.leader]}), écrite sans voyelle devant elle.`;
+    if (i.kind === "cluster") return `Groupe <b>${i.chars}</b> : la première lettre (${N[i.chars[0]]}) donne la classe <b>${c}</b>.`;
+    if (i.kind === "rmuet") return `<b>${i.chars}</b> : le ร ne se prononce pas ; la classe vient de ${i.chars[0]} : <b>${c}</b>.`;
+    if (i.kind === "lien") return `Syllabe de liaison (a bref) devant <b>${i.chars}</b> : mot savant, la consonne finale sert aussi d'initiale (classe ${c}).`;
+    return `<b>${i.chars}</b> (${N[i.chars]}) : classe <b>${c}</b>.`;
+  }
+  function sylCardHTML(sy, wi, si) {
+    const key = wi + "_" + si, test = toneTest && !toneAnswered[key];
+    const vow = sy.linked ? "a bref implicite" : (sy.vowel.long ? "voyelle longue" : "voyelle brève") + (sy.vowel.g ? " (" + sy.vowel.g + ")" : "");
+    const fin = sy.fin ? `finale <b>${sy.fin}</b> (son -${sy.fk})` : "pas de finale";
+    const mk = sy.mark ? `signe <b>${ThaiTone.MARKS[sy.mark]}</b>` : (sy.invisible ? `aucun signe écrit (marque invisible : <b>${sy.invisible}</b>)` : "aucun signe");
+    const col = TONE_COL[sy.tone];
+    const head = `<div class="tsy-h"><span class="tsy-th">${esc(sy.text)}${sy.repeated ? " <small>(répété ๆ)</small>" : ""}</span>${sy.romSyl ? `<span class="tsy-ro">${esc(sy.romSyl)}</span>` : ""}</div>`;
+    let res;
+    if (test) {
+      res = `<div class="tsy-q">Quel ton ? ` + ["mid", "low", "fall", "high", "rise"].map(t => `<button class="tbtn" style="border-color:${TONE_COL[t]}" onclick="toneGuess('${key}','${t}','${sy.tone}')">${TONE_EX[t]}</button>`).join("") + `</div>`;
+    } else {
+      const g = toneAnswered[key];
+      const verdict = (g ? `<div class="tsy-g">${g.ok ? "✅ Bien vu !" : "❌ Tu avais choisi " + ThaiTone.T[g.t] + "."}</div>` : "") + (sy.romSyl ? (sy.match ? `<span class="tchk ok">✓ cohérent avec la romanisation du lexique</span>` : toneItems[wi] && toneItems[wi].res.exception ? `<span class="tchk ex">ℹ️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} (mot irrégulier)</span>` : `<span class="tchk ko">⚠️ Ta romanisation donne ${ThaiTone.T[sy.romTone]} : à vérifier (exception du mot, mot savant, ou à corriger dans le lexique)</span>`) : "");
+      res = `${g ? "" : ""}<div class="tsy-t" style="color:${col}">→ ton <b>${ThaiTone.T[sy.tone]}</b> (${TONE_EX[sy.tone]})</div>${verdict}<div class="tsy-rule">${esc(sy.rule)}</div><div class="tsy-form">🎓 Formule : <b>${esc(sy.formula)}</b></div>`;
+    }
+    if (test) return `<div class="tsy" style="border-color:var(--border)">${head}${res}</div>`;
+    return `<div class="tsy" style="border-color:${col}">${head}<ul><li>${iniText(sy)}</li><li>${vow} · ${fin} → syllabe <b>${sy.type}</b></li><li>${mk}</li></ul>${res}</div>`;
+  }
+  function toneWordHTML(it, wi) {
+    const r = it.res;
+    if (!r || !r.ok) return `<div class="tword"><div class="tw-h">${esc(it.thai)}</div><p class="tmuted">${esc(r && r.reason || "Rien à analyser.")}</p></div>`;
+    let warn = "";
+    if (r.romSyl && r.romSyl.length && !r.countMatch) warn = `<p class="tchk ko">⚠️ Mon découpage donne ${r.syls.length} syllabes, ta romanisation en a ${r.romSyl.length} : comparaison impossible, vérifie le découpage.</p>`;
+    if (r.breve) warn += `<p class="tchk ko">⚠️ Ta romanisation utilise l'accent ă ĕ ĭ ŏ ŭ (breve) : je le lis comme un ton montant (ǎ ě ǐ ǒ ǔ). Corrige-le avec le bouton de la Configuration.</p>`;
+    if (r.exception) warn += `<p class="tchk ex">ℹ️ Mot irrégulier (mot savant, emprunt ou syllabe de liaison) : la règle seule ne suffit pas. Ta romanisation fait foi, vérifie-la avec ton prof.</p>`;
+    const strip = r.syls.map(s => `<span class="tchip" style="background:${TONE_COL[s.tone]}">${esc(s.text)} ${TONE_EX[s.tone]}</span>`).join("");
+    return `<div class="tword"><div class="tw-h">${esc(it.thai)} <span class="tmuted">${esc(it.rom || "")}</span></div>${toneTest ? "" : `<div class="tstrip">${strip}</div>`}${warn}${r.syls.map((s, si) => sylCardHTML(s, wi, si)).join("")}</div>`;
+  }
+  function renderToneModal() {
+    document.getElementById("tone-body").innerHTML = toneItems.map(toneWordHTML).join("") || "<p>Rien à analyser.</p>";
+    document.getElementById("tone-test").classList.toggle("on", toneTest);
+  }
+  function showTone(items) {
+    toneItems = items.filter(x => x && x.thai).map(x => ({ thai: x.thai, rom: x.rom || "", res: ThaiTone.analyze(x.thai, x.rom || "") })).filter(x => x.res);
+    if (!toneItems.length) { showToast("Aucun mot thaï à analyser."); return; }
+    toneAnswered = {};
+    document.getElementById("tone-modal").style.display = "flex";
+    renderToneModal();
+  }
+  function closeTone() { document.getElementById("tone-modal").style.display = "none"; }
+  function toggleToneTest() { toneTest = !toneTest; toneAnswered = {}; renderToneModal(); }
+  function toneGuess(key, t, good) { toneAnswered[key] = { t, ok: t === good }; renderToneModal(); }
+  function toneForLex(id) { const w = lexicon.find(x => x.id === id); if (w) showTone([{ thai: w.thai, rom: w.rom }]); }
+  function toneForPhrase() {
+    showTone(currentPhrase.filter(w => w.cat !== "__SPACE__").map(w => ({ thai: w.thai, rom: w.rom })));
+  }
+  function toneForSavedPhrase(id) {
+    const p = savedPhrases.find(x => x.id === id); if (!p || !p.tokens) return;
+    showTone(p.tokens.filter(w => w.cat !== "__SPACE__").map(w => ({ thai: w.thai, rom: w.rom })));
+  }
+  function toneForReader(i) {
+    const tk = readerTokens[i];
+    const e = tk.entries && tk.entries[0];
+    showTone([{ thai: tk.t, rom: e ? e.rom : "" }]);
+  }
+  function toneForReaderAll() {
+    const items = readerTokens.filter(t => !t.plain && /[฀-๿]/.test(t.t)).slice(0, 40).map(t => ({ thai: t.t, rom: t.entries && t.entries[0] ? t.entries[0].rom : "" }));
+    showTone(items);
+  }
+  function toneReport() {
+    const box = document.getElementById("tone-report");
+    let n = 0, ok = 0, exc = 0, cnt = 0, bad = 0, fail = 0, brv = 0; const list = [];
+    lexicon.forEach(w => {
+      if (!w.rom || !/[\u0E00-\u0E7F]/.test(w.thai)) return;
+      const r = ThaiTone.analyze(w.thai, w.rom); n++;
+      if (!r || !r.ok) { fail++; list.push({ w, k: 3, why: "découpage impossible" }); return; }
+      if (r.breve) brv++;
+      if (r.match) ok++;
+      else if (r.exception) exc++;
+      else if (!r.countMatch) { cnt++; list.push({ w, k: 2, why: `${r.syls.length} syllabes trouvées / ${r.romSyl.length} dans la romanisation` }); }
+      else { bad++; list.push({ w, k: 1, why: r.syls.filter(s => !s.match).map(s => `${s.text} : moteur ${ThaiTone.T[s.tone]}, lexique ${ThaiTone.T[s.romTone]}`).join(" ; ") }); }
+    });
+    list.sort((a, b) => a.k - b.k);
+    const pct = x => n ? Math.round(1000 * x / n) / 10 : 0;
+    box.innerHTML = `<p><b>${pct(ok + exc)} %</b> d'entrées cohérentes, exceptions connues comprises (${ok} règles respectées + ${exc} mots irréguliers connus, sur ${n}).</p><p>À regarder : ${bad} divergences de ton · ${cnt} découpages différents · ${fail} non analysables.</p>` + (brv ? `<p>⚠️ ${brv} entrées utilisent l'accent breve (ă ĕ ĭ ŏ ŭ). <button onclick="fixBreve()">Corriger les accents</button></p>` : "") + `<p class="tmuted">Les divergences de ton sont les plus utiles : ce sont souvent de vraies fautes (accent oublié ou mal placé). Touche un mot pour voir l'explication. Un découpage différent vient souvent d'un trait d'union oublié ou d'un mot savant.</p><div style="max-height:340px; overflow:auto;">` + list.map(x => `<div class="trow" onclick="toneForLex('${x.w.id}')"><b>${esc(x.w.thai)}</b> <span class="tmuted">${esc(x.w.rom)}</span><br><small>${esc(x.why)}</small></div>`).join("") + `</div>`;
+  }
+  function fixBreve() {
+    const map = { "\u0306": "\u030C" };
+    const todo = lexicon.filter(w => /\u0306/.test((w.rom || "").normalize("NFD")));
+    if (!todo.length) { showToast("Aucun accent à corriger."); return; }
+    if (!confirm(`Remplacer les accents breve (ă ĕ ĭ ŏ ŭ) par des accents montants (ǎ ě ǐ ǒ ǔ) dans la romanisation de ${todo.length} entrées ?`)) return;
+    const now = Date.now();
+    todo.forEach(w => { w.rom = w.rom.normalize("NFD").replace(/\u0306/g, "\u030C").normalize("NFC"); w.modifiedAt = now; });
+    try { persistLexicon(); } catch (e) { /* ignore */ }
+    renderLexicon(); updateThemeDropdowns(); toneReport();
+    showToast(`${todo.length} entrées corrigées. Pense à exporter ton lexique.`);
+  }
+
+  window.onload = async () => {
+    await loadLexiconFromDB();
+    try { document.getElementById("reader-text").value = localStorage.getItem(READER_KEY) || ""; } catch (e) { /* ignore */ }
+    init();
+    updateStorageState();
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignore */ }
+    if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register("sw.js").catch(() => {});
+  };
+</script>
+</body>
+</html>
