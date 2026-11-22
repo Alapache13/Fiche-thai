@@ -954,6 +954,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     downloadJSON(payload, "recurrences_" + dateStamp() + ".js");
   }
 
+  let lexLimit = 300, lexSig = "";
   function renderLexicon() {
     const tbody = document.getElementById("lexicon-body");
     const filter = normThai(document.getElementById("search").value.toLowerCase());
@@ -969,6 +970,8 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
       if (th.includes(filter)) return 2;
       return 3;
     };
+    const sig = filter + "|" + theme + "|" + collocOnly;
+    if (sig !== lexSig) { lexSig = sig; lexLimit = 300; }
     const rows = lexicon
       .filter(w => (!theme || w.theme === theme) && (!collocOnly || w.type === "collocation") && (normThai(w.thai.toLowerCase()).includes(filter) || (w.sens + " " + (w.court || "")).toLowerCase().includes(filter) || (w.note || "").toLowerCase().includes(filter)))
       .map((w, i) => ({ w, i, r: rank(w) }))
@@ -979,7 +982,10 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
         const badge = w.type === "collocation" ? '🧩 ' : '';
         return `<tr><td style="font-weight:bold; color:${color}">${badge}${w.thai}</td><td><span class="badge" style="background:${color}">${w.cat}</span></td><td>${lexCell(w)}</td><td style="white-space:nowrap;"><button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="toneForLex('${w.id}')" title="Pourquoi ce ton ?">🔊</button> <button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="editWordFromLexicon('${w.id}')">✏️</button> <button class="danger" onclick="deleteWord('${w.id}')">×</button></td></tr>`;
       });
-    tbody.innerHTML = rows.join('');
+    const total = rows.length;
+    let html = rows.slice(0, lexLimit).join('');
+    if (total > lexLimit) html += `<tr><td colspan="4" style="text-align:center; padding:14px;"><button onclick="lexLimit += 400; renderLexicon();">Afficher plus (${total - lexLimit} restants sur ${total})</button> <button class="secondary" onclick="lexLimit = 1e9; renderLexicon();">Tout afficher</button></td></tr>`;
+    tbody.innerHTML = html;
   }
 
   function lexCell(w) {
