@@ -1120,15 +1120,15 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     input.dispatchEvent(new Event("input"));
   }
 
-  // Frappe thaï au clavier du PC (disposition Kedmanee) : les lettres suivent la lettre latine tapée, le reste suit l'emplacement de la touche.
+  // Frappe thaï au clavier du PC (disposition Kedmanee), selon l'emplacement de la touche.
   document.addEventListener("keydown", e => {
     if (e.key === "F2") { e.preventDefault(); toggleThaiTyping(); return; }
     const t = e.target;
     if (!thaiTyping || !t || !t.matches || !t.matches("[data-thai]") || e.isComposing) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+    // Emplacement physique de la touche (comme branah.com) : fonctionne aussi sur un clavier QWERTZ (y et z inversés).
     let k = null;
-    if (/^[a-zA-Z]$/.test(e.key)) { const lo = e.key.toLowerCase(); k = LETTER_MAP[lo]; if (k) k = { c: e.key !== lo ? k.s : k.u }; }
-    else if (CODE_MAP[e.code]) k = { c: e.shiftKey ? CODE_MAP[e.code].s : CODE_MAP[e.code].u };
+    if (CODE_MAP[e.code]) k = { c: e.shiftKey ? CODE_MAP[e.code].s : CODE_MAP[e.code].u };
     if (!k) return;
     e.preventDefault();
     const start = t.selectionStart ?? t.value.length, end = t.selectionEnd ?? t.value.length;
