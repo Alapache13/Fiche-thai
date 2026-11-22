@@ -90,6 +90,10 @@
   #reader-detail .entry { border-top:1px solid var(--border); padding:10px 0; }
   #reader-detail .entry:first-child { border-top:none; }
   #reader-text { width:100%; height:140px; font-size:18px; }
+  .bfind { margin-bottom:10px; }
+  .bres { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 10px; border:1px solid var(--border); border-radius:6px; margin-top:4px; cursor:pointer; background:var(--card); }
+  .bres:hover, .bres.first { border-color:var(--accent); } .bres .th { font-size:20px; font-weight:bold; } .bres .ro { color:var(--muted); } .bres .ct { flex:1; min-width:120px; }
+  .thai-mode-btn.on { background:var(--accent); color:#000; }
   #tone-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:2000; align-items:flex-end; justify-content:center; }
   #tone-sheet { background:var(--bg); border:1px solid var(--accent); border-radius:14px 14px 0 0; width:100%; max-width:720px; max-height:88vh; display:flex; flex-direction:column; }
   #tone-head { display:flex; gap:8px; align-items:center; padding:10px 12px; border-bottom:1px solid var(--border); }
@@ -128,8 +132,17 @@
       <button onclick="undoLastWord()">Retour</button>
       <button class="secondary" onclick="insertSpaceBreak()" title="Insère une coupure — l'espace fait office de virgule/point en thaï">␣ Nouvelle phrase</button>
     </div>
+    <div class="bfind">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+        <input type="text" id="bsearch" data-thai="1" placeholder="🔍 Trouver un mot dans tout le lexique (thaï, romanisation ou sens)" oninput="bFind()" onkeydown="bFindKey(event)" onfocus="lastThaiInput=this" style="flex:1;">
+        <button class="ghost thai-mode-btn" onclick="toggleThaiTyping()" style="white-space:nowrap;"></button>
+        <button class="secondary" onclick="toggleThaiKeyboard('thai-keyboard-b', 'bsearch')" style="white-space:nowrap;">⌨️</button>
+      </div>
+      <div id="thai-keyboard-b" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;"></div>
+      <div id="bresults" onclick="bFindClick(event)"></div>
+    </div>
     <div id="category-btns"></div>
-    <input type="text" id="word-search" placeholder="🔍 Filtrer les mots de cette catégorie..." style="display:none;" oninput="populateWordSelect()">
+    <input type="text" id="word-search" data-thai="1" placeholder="🔍 Filtrer les mots de cette catégorie..." style="display:none;" oninput="populateWordSelect()" onfocus="lastThaiInput=this">
     <select id="word-select" onchange="addWordToPhrase(this.value); this.value='';">
       <option value="" disabled selected>+ Choisissez une catégorie ci-dessus...</option>
     </select>
@@ -161,7 +174,7 @@
 </div>
 
 <div id="p-reader" class="panel">
-  <textarea id="reader-text" placeholder="Colle ici un texte thaï (article, message, légende…)" oninput="saveReaderDraft()"></textarea>
+  <textarea id="reader-text" data-thai="1" placeholder="Colle ici un texte thaï (article, message, légende…)" oninput="saveReaderDraft()"></textarea>
   <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0;">
     <button onclick="analyzeReader()">🔍 Analyser le texte</button>
     <button class="ghost" onclick="clearReader()">Effacer</button>
@@ -179,7 +192,8 @@
 
 <div id="p-lexicon" class="panel">
   <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
-    <input type="text" id="search" placeholder="Rechercher..." oninput="renderLexicon()" style="flex:2;" onfocus="lastThaiInput=this">
+    <input type="text" id="search" data-thai="1" placeholder="Rechercher..." oninput="renderLexicon()" style="flex:2;" onfocus="lastThaiInput=this">
+    <button class="ghost thai-mode-btn" onclick="toggleThaiTyping()" style="white-space:nowrap;"></button>
     <select id="filter-theme" onchange="renderLexicon()" style="flex:1;"><option value="">Tous les thèmes</option></select>
     <label style="display:flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; white-space:nowrap;">
       <input type="checkbox" id="filter-colloc-only" style="width:auto;" onchange="renderLexicon()"> 🧩 Collocations seulement
@@ -195,7 +209,7 @@
     <option value="Divers">Divers</option>
   </select>
   <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto; gap:8px; margin-top:5px; margin-bottom:10px;">
-    <input type="text" id="new-th" placeholder="Thaï" onfocus="lastThaiInput=this">
+    <input type="text" id="new-th" data-thai="1" placeholder="Thaï" onfocus="lastThaiInput=this">
     <input type="text" id="new-ro" placeholder="Phonétique">
     <input type="text" id="new-se" placeholder="Sens">
     <select id="new-ca"></select>
@@ -669,7 +683,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     catch (e) { alert("Je n'ai pas pu importer : " + e.message); }
   }
 
-  function init() { document.getElementById("profile-text").value = getProfileText(); cleanDuplicates(); updateNewCaOptions("Tout"); onThemeSelectChange(); renderAll(); }
+  function init() { document.getElementById("profile-text").value = getProfileText(); cleanDuplicates(); updateNewCaOptions("Tout"); onThemeSelectChange(); renderAll(); updateThaiModeBtns(); }
 
   function cleanDuplicates() {
     const seen = new Set();
@@ -1023,33 +1037,62 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
   let lastThaiInput = null;
   let thaiKbShift = false;
 
-  function toggleThaiKeyboard() {
-    const box = document.getElementById("thai-keyboard");
-    if (box.style.display === "none") { box.style.display = "block"; renderThaiKeyboard(); }
+  const LAT_U = ["`1234567890-=", "qwertyuiop[]\\", "asdfghjkl;'", "zxcvbnm,./"];
+  const LAT_S = ["~!@#$%^&*()_+", "QWERTYUIOP{}|", "ASDFGHJKL:\"", "ZXCVBNM<>?"];
+  const KB_CODES = [
+    ["Backquote","Digit1","Digit2","Digit3","Digit4","Digit5","Digit6","Digit7","Digit8","Digit9","Digit0","Minus","Equal"],
+    ["KeyQ","KeyW","KeyE","KeyR","KeyT","KeyY","KeyU","KeyI","KeyO","KeyP","BracketLeft","BracketRight","Backslash"],
+    ["KeyA","KeyS","KeyD","KeyF","KeyG","KeyH","KeyJ","KeyK","KeyL","Semicolon","Quote"],
+    ["KeyZ","KeyX","KeyC","KeyV","KeyB","KeyN","KeyM","Comma","Period","Slash"]
+  ];
+  const CODE_MAP = {}, LETTER_MAP = {};
+  THAI_KB_ROWS.forEach((row, r) => row.forEach((k, c) => {
+    const code = KB_CODES[r][c]; CODE_MAP[code] = k;
+    if (/^Key[A-Z]$/.test(code)) LETTER_MAP[code.slice(3).toLowerCase()] = k;
+  }));
+  let thaiTyping = true;
+  try { thaiTyping = localStorage.getItem("thai_typing_v1") !== "0"; } catch (e) { /* ignore */ }
+
+  function updateThaiModeBtns() {
+    document.querySelectorAll(".thai-mode-btn").forEach(b => {
+      b.classList.toggle("on", thaiTyping);
+      b.textContent = thaiTyping ? "ก Thaï" : "A Latin";
+      b.title = thaiTyping ? "Les touches de ton clavier écrivent en thaï (dispo Kedmanee, comme sur branah.com). Clique ou appuie sur F2 pour écrire en lettres latines." : "Frappe normale (lettres latines). Clique ou appuie sur F2 pour écrire en thaï avec ton clavier.";
+    });
+  }
+  function toggleThaiTyping() {
+    thaiTyping = !thaiTyping;
+    try { localStorage.setItem("thai_typing_v1", thaiTyping ? "1" : "0"); } catch (e) { /* ignore */ }
+    updateThaiModeBtns();
+  }
+
+  function toggleThaiKeyboard(boxId, inputId) {
+    const box = document.getElementById(boxId || "thai-keyboard");
+    if (box.style.display === "none") { box.style.display = "block"; if (inputId) lastThaiInput = document.getElementById(inputId); renderThaiKeyboard(); }
     else box.style.display = "none";
   }
 
   function renderThaiKeyboard() {
-    const box = document.getElementById("thai-keyboard");
-    const keyStyle = "min-width:36px; padding:6px 4px; font-size:15px; background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:5px; cursor:pointer; display:flex; flex-direction:column; align-items:center; line-height:1.1;";
+    const keyStyle = "min-width:36px; padding:4px 4px; font-size:16px; background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:5px; cursor:pointer; display:flex; flex-direction:column; align-items:stretch; line-height:1.15;";
     let html = `<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px;">
       <button onclick="thaiKbShift=!thaiKbShift; renderThaiKeyboard();" style="background:${thaiKbShift ? 'var(--accent)' : 'var(--card)'}; color:${thaiKbShift ? '#000' : 'var(--text)'}; border:1px solid var(--border); padding:6px 14px; border-radius:5px; cursor:pointer;">⇧ Maj ${thaiKbShift ? '(actif)' : ''}</button>
-      <span style="color:var(--muted); font-size:12px;">Écrit dans le dernier champ thaï utilisé (recherche ou ajout de mot)</span>
+      <span style="color:var(--muted); font-size:12px;">Même disposition que branah.com : la lettre latine de la touche est en haut à gauche. Tu peux aussi taper au clavier de ton PC (F2 : thaï ⇄ latin).</span>
     </div>`;
-    THAI_KB_ROWS.forEach(row => {
+    THAI_KB_ROWS.forEach((row, r) => {
       html += `<div style="display:flex; gap:4px; margin-bottom:4px; flex-wrap:wrap;">`;
-      row.forEach(k => {
+      row.forEach((k, c) => {
         const ch = thaiKbShift ? k.s : k.u;
         const other = thaiKbShift ? k.u : k.s;
-        html += `<button style="${keyStyle}" onclick="insertThaiChar('${ch.replace(/'/g, "\\'")}')"><span style="font-size:10px; color:var(--muted);">${other}</span><span>${ch}</span></button>`;
+        const lat = (thaiKbShift ? LAT_S : LAT_U)[r][c];
+        html += `<button style="${keyStyle}" onclick="insertThaiChar('${ch.replace(/'/g, "\\'")}')"><span style="display:flex; justify-content:space-between; gap:6px; font-size:10px; color:var(--muted);"><span style="color:var(--accent);">${esc(lat)}</span><span>${other}</span></span><span style="text-align:center; font-size:18px;">${ch}</span></button>`;
       });
       html += `</div>`;
     });
     html += `<div style="display:flex; gap:4px; margin-top:6px;">
-      <button style="${keyStyle} min-width:250px;" onclick="insertThaiChar(' ')">espace</button>
-      <button style="${keyStyle} min-width:70px;" onclick="backspaceThai()">⌫ effacer</button>
+      <button style="${keyStyle} min-width:250px; align-items:center;" onclick="insertThaiChar(' ')">espace</button>
+      <button style="${keyStyle} min-width:70px; align-items:center;" onclick="backspaceThai()">⌫ effacer</button>
     </div>`;
-    box.innerHTML = html;
+    ["thai-keyboard", "thai-keyboard-b"].forEach(id => { const box = document.getElementById(id); if (box && box.style.display !== "none") box.innerHTML = html; });
   }
 
   function insertThaiChar(ch) {
@@ -1076,6 +1119,57 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     input.focus();
     input.dispatchEvent(new Event("input"));
   }
+
+  // Frappe thaï au clavier du PC (disposition Kedmanee) : les lettres suivent la lettre latine tapée, le reste suit l'emplacement de la touche.
+  document.addEventListener("keydown", e => {
+    if (e.key === "F2") { e.preventDefault(); toggleThaiTyping(); return; }
+    const t = e.target;
+    if (!thaiTyping || !t || !t.matches || !t.matches("[data-thai]") || e.isComposing) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+    let k = null;
+    if (/^[a-zA-Z]$/.test(e.key)) { const lo = e.key.toLowerCase(); k = LETTER_MAP[lo]; if (k) k = { c: e.key !== lo ? k.s : k.u }; }
+    else if (CODE_MAP[e.code]) k = { c: e.shiftKey ? CODE_MAP[e.code].s : CODE_MAP[e.code].u };
+    if (!k) return;
+    e.preventDefault();
+    const start = t.selectionStart ?? t.value.length, end = t.selectionEnd ?? t.value.length;
+    t.value = t.value.slice(0, start) + k.c + t.value.slice(end);
+    t.selectionStart = t.selectionEnd = start + k.c.length;
+    t.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // Recherche dans tout le lexique depuis le Constructeur (toutes catégories)
+  const plainTxt = x => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  let bFound = [];
+  function bFind() {
+    const out = document.getElementById("bresults");
+    const q = normThai(document.getElementById("bsearch").value.trim().toLowerCase());
+    const qp = plainTxt(q);
+    if (!q) { bFound = []; out.innerHTML = ""; return; }
+    const scored = [];
+    for (const w of lexicon) {
+      const th = normThai(w.thai.toLowerCase());
+      let r = 9;
+      if (th === q) r = 0; else if (th.startsWith(q)) r = 1; else if (th.includes(q)) r = 2;
+      else if (qp && plainTxt(w.rom).includes(qp)) r = 3;
+      else if (qp && plainTxt((w.court || "") + " " + (w.sens || "")).includes(qp)) r = 4;
+      if (r < 9) scored.push({ w, r });
+    }
+    scored.sort((a, b) => a.r - b.r || a.w.thai.length - b.w.thai.length);
+    bFound = scored.slice(0, 30).map(x => x.w);
+    out.innerHTML = bFound.length ? bFound.map((w, i) => {
+      const color = grammarConfig.CAT_COLORS[w.cat] || "#666";
+      return `<div class="bres${i === 0 ? " first" : ""}" data-i="${i}"><span class="th">${w.type === "collocation" ? "🧩 " : ""}${esc(w.thai)}</span><span class="ro">${esc(w.rom)}</span><span class="ct">${esc(glossList(w).join(" / "))}</span><span class="badge" style="background:${color}">${esc(w.cat)}</span></div>`;
+    }).join("") + (scored.length > 30 ? `<div class="tmuted" style="margin-top:4px;">… ${scored.length - 30} autres : précise ta recherche.</div>` : "") : `<div class="tmuted" style="margin-top:6px;">Aucun mot trouvé. Il n'est peut-être pas encore dans ton lexique.</div>`;
+  }
+  function bFindAdd(i) {
+    const w = bFound[i]; if (!w) return;
+    addWordToPhrase(w.id);
+    const inp = document.getElementById("bsearch"); inp.value = ""; bFound = [];
+    document.getElementById("bresults").innerHTML = "";
+    inp.focus();
+  }
+  function bFindClick(e) { const row = e.target.closest(".bres"); if (row) bFindAdd(+row.dataset.i); }
+  function bFindKey(e) { if (e.key === "Enter" && bFound.length) { e.preventDefault(); bFindAdd(0); } }
 
   function editWordFromLexicon(id) {
     const w = lexicon.find(x => x.id === id);
