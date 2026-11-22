@@ -64,6 +64,7 @@
   table { width: 100%; border-collapse: collapse; margin-top: 15px; }
   th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { color: var(--muted); }
+  #lexicon-table td { overflow-wrap: anywhere; word-break: break-word; }
   textarea { width: 100%; height: 120px; font-family: monospace; margin-bottom: 10px; }
   .toast { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: black; padding: 10px 20px; border-radius: 6px; font-weight: bold; z-index: 1000; }
   .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; color: white; }
@@ -233,8 +234,8 @@
   </label>
   <input type="text" id="new-court" placeholder="Sens court (facultatif) : ex. je / cheveux. Sert dans les phrases ; sinon pris au début du sens" style="width:100%; margin-bottom:10px;">
   <input type="text" id="new-no" placeholder="Note contextuelle" style="width:100%; margin-bottom:20px;">
-  <table>
-    <thead><tr><th>Thaï</th><th>Catégorie</th><th>Phonétique & Sens</th><th>Action</th></tr></thead>
+  <table id="lexicon-table" style="table-layout:fixed;">
+    <thead><tr><th style="width:19%">Thaï</th><th style="width:15%">Catégorie</th><th style="width:48%">Phonétique & Sens</th><th style="width:18%">Action</th></tr></thead>
     <tbody id="lexicon-body"></tbody>
   </table>
 </div>
@@ -954,7 +955,13 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     downloadJSON(payload, "recurrences_" + dateStamp() + ".js");
   }
 
-  let lexLimit = 300, lexSig = "";
+  let lexLimit = 300, lexSig = "", lexAll = [], lexShown = 0;
+  function lexMoreRow() { return lexShown < lexAll.length ? `<tr id="lex-more"><td colspan="4" style="text-align:center; padding:14px;"><button onclick="lexMore()">Afficher plus (${lexAll.length - lexShown} restants sur ${lexAll.length})</button></td></tr>` : ""; }
+  function lexMore() {
+    const tb = document.getElementById("lexicon-body"), m = document.getElementById("lex-more"); if (m) m.remove();
+    const from = lexShown; lexShown = Math.min(lexShown + 200, lexAll.length); lexLimit = lexShown;
+    tb.insertAdjacentHTML("beforeend", lexAll.slice(from, lexShown).join("") + lexMoreRow());
+  }
   function renderLexicon() {
     const tbody = document.getElementById("lexicon-body");
     const filter = normThai(document.getElementById("search").value.toLowerCase());
@@ -982,10 +989,8 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
         const badge = w.type === "collocation" ? '🧩 ' : '';
         return `<tr><td style="font-weight:bold; color:${color}">${badge}${w.thai}</td><td><span class="badge" style="background:${color}">${w.cat}</span></td><td>${lexCell(w)}</td><td style="white-space:nowrap;"><button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="toneForLex('${w.id}')" title="Pourquoi ce ton ?">🔊</button> <button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="editWordFromLexicon('${w.id}')">✏️</button> <button class="danger" onclick="deleteWord('${w.id}')">×</button></td></tr>`;
       });
-    const total = rows.length;
-    let html = rows.slice(0, lexLimit).join('');
-    if (total > lexLimit) html += `<tr><td colspan="4" style="text-align:center; padding:14px;"><button onclick="lexLimit += 400; renderLexicon();">Afficher plus (${total - lexLimit} restants sur ${total})</button> <button class="secondary" onclick="lexLimit = 1e9; renderLexicon();">Tout afficher</button></td></tr>`;
-    tbody.innerHTML = html;
+    lexAll = rows; lexShown = Math.min(lexLimit, rows.length);
+    tbody.innerHTML = rows.slice(0, lexShown).join("") + lexMoreRow();
   }
 
   function lexCell(w) {
