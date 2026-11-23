@@ -452,7 +452,7 @@
     const t = currentPhrase[i];
     if (!t || t.cat === "__SPACE__") return;
     if (altIndex === i && altOriginal) { closeAlt(); return; }
-    altIndex = i; altOffset = 0;
+    altIndex = i; altOffset = 0; altQ = "";
     altOriginal = { ...t };
     renderAltPanel();
   }
@@ -512,10 +512,17 @@
         <button class="ghost" style="padding:3px 10px; font-size:12px;" onclick="closeAlt()">Fermer ✕</button>
       </div>
       <div class="hint">Même catégorie que « ${esc(altOriginal.thai)} », classés d'abord par thème proche, puis par fréquence dans tes phrases enregistrées. Ils sont <strong>grammaticalement possibles</strong> : tous ne sont pas forcément naturels. En cas de doute, demande à ton prof ; une phrase validée par lui devient un modèle sûr. Touche une ligne pour essayer le mot.</div>
+      <div style="display:flex; gap:8px; align-items:center; margin:8px 0 4px;">
+        <input type="text" id="alt-search" data-thai="1" placeholder="🔍 Remplacer par un mot de n'importe quelle catégorie (thaï, romanisation, sens)" oninput="altFind()" onkeydown="altFindKey(event)" onfocus="lastThaiInput=this" style="flex:1;">
+        <button class="ghost thai-mode-btn" onclick="toggleThaiTyping()" style="white-space:nowrap;"></button>
+      </div>
+      <div id="alt-results" onclick="altFindClick(event)"></div>
       ${rowFor(altOriginal, true)}
       ${page.length ? page.map(w => rowFor(w, false)).join("") : '<p style="color:var(--muted); font-size:13px;">Aucun autre mot de cette catégorie dans le lexique chargé. Importe ton dossier lexique/ dans Configuration.</p>'}
       ${all.length > 8 ? `<button class="secondary" style="margin-top:4px;" onclick="altOffset += 8; renderAltPanel();">↻ Voir d'autres mots (${Math.min(altOffset + 8, all.length)}/${all.length})</button>` : ""}`;
     panel.style.display = "block";
+    const as = document.getElementById("alt-search"); if (as && altQ) { as.value = altQ; altFind(); }
+    updateThaiModeBtns();
   }
 
   function applyAlt(id) {
@@ -1139,12 +1146,9 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
 
   // Recherche dans tout le lexique depuis le Constructeur (toutes catégories)
   const plainTxt = x => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  let bFound = [];
-  function bFind() {
-    const out = document.getElementById("bresults");
-    const q = normThai(document.getElementById("bsearch").value.trim().toLowerCase());
-    const qp = plainTxt(q);
-    if (!q) { bFound = []; out.innerHTML = ""; return; }
+  function searchLexicon(raw) {
+    const q = normThai(raw.trim().toLowerCase()), qp = plainTxt(q);
+    if (!q) return { list: [], total: 0 };
     const scored = [];
     for (const w of lexicon) {
       const th = normThai(w.thai.toLowerCase());
@@ -1155,12 +1159,32 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
       if (r < 9) scored.push({ w, r });
     }
     scored.sort((a, b) => a.r - b.r || a.w.thai.length - b.w.thai.length);
-    bFound = scored.slice(0, 30).map(x => x.w);
-    out.innerHTML = bFound.length ? bFound.map((w, i) => {
+    return { list: scored.slice(0, 30).map(x => x.w), total: scored.length };
+  }
+  function foundRowsHTML(res) {
+    if (!res.list.length) return `<div class="tmuted" style="margin-top:6px;">Aucun mot trouvé. Il n'est peut-être pas encore dans ton lexique.</div>`;
+    return res.list.map((w, i) => {
       const color = grammarConfig.CAT_COLORS[w.cat] || "#666";
       return `<div class="bres${i === 0 ? " first" : ""}" data-i="${i}"><span class="th">${w.type === "collocation" ? "🧩 " : ""}${esc(w.thai)}</span><span class="ro">${esc(w.rom)}</span><span class="ct">${esc(glossList(w).join(" / "))}</span><span class="badge" style="background:${color}">${esc(w.cat)}</span></div>`;
-    }).join("") + (scored.length > 30 ? `<div class="tmuted" style="margin-top:4px;">… ${scored.length - 30} autres : précise ta recherche.</div>` : "") : `<div class="tmuted" style="margin-top:6px;">Aucun mot trouvé. Il n'est peut-être pas encore dans ton lexique.</div>`;
+    }).join("") + (res.total > 30 ? `<div class="tmuted" style="margin-top:4px;">… ${res.total - 30} autres : précise ta recherche.</div>` : "");
   }
+  let bFound = [];
+  function bFind() {
+    const out = document.getElementById("bresults");
+    const res = searchLexicon(document.getElementById("bsearch").value);
+    bFound = res.list;
+    out.innerHTML = document.getElementById("bsearch").value.trim() ? foundRowsHTML(res) : "";
+  }
+  // Remplacer un mot de la phrase par n'importe quel mot du lexique (toutes catégories)
+  let altQ = "", altFound = [];
+  function altFind() {
+    const inp = document.getElementById("alt-search"); altQ = inp.value;
+    const res = searchLexicon(altQ); altFound = res.list;
+    document.getElementById("alt-results").innerHTML = altQ.trim() ? foundRowsHTML(res) : "";
+  }
+  function altFindAdd(i) { const w = altFound[i]; if (!w) return; applyAlt(w.id); closeAlt(); }
+  function altFindClick(e) { const row = e.target.closest(".bres"); if (row) altFindAdd(+row.dataset.i); }
+  function altFindKey(e) { if (e.key === "Enter" && altFound.length) { e.preventDefault(); altFindAdd(0); } }
   function bFindAdd(i) {
     const w = bFound[i]; if (!w) return;
     addWordToPhrase(w.id);
