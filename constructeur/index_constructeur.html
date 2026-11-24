@@ -106,7 +106,8 @@
   .tsy-t { font-size:16px; margin-top:4px; } .tsy-form { margin-top:4px; padding:4px 8px; border-radius:6px; background:rgba(148,163,184,.14); font-size:14px; } .tsy-rule { color:var(--muted); font-size:13px; margin-top:2px; }
   .tchk { display:inline-block; font-size:12px; border-radius:6px; padding:2px 6px; margin-top:4px; } .tchk.ok { background:rgba(16,185,129,.18); color:#34d399; } .tchk.ex { background:rgba(148,163,184,.18); color:#cbd5e1; } .tchk.ko { background:rgba(245,158,11,.18); color:#fbbf24; }
   .tbtn { background:var(--bg); color:var(--text); border:2px solid; padding:6px 12px; margin:0 3px; font-size:16px; } .tsy-q { margin-top:6px; }
-  .trow { padding:6px 4px; border-bottom:1px solid var(--border); cursor:pointer; } .tonebtn { background:transparent; border:1px solid var(--border); color:var(--accent); padding:3px 7px; font-size:12px; border-radius:6px; }
+  .trow { padding:6px 4px; border-bottom:1px solid var(--border); cursor:pointer; } .spk { background:transparent; border:1px solid var(--border); color:var(--text); padding:3px 7px; font-size:12px; border-radius:6px; } .spk.on { background:var(--accent); color:#fff; }
+  .tonebtn { background:transparent; border:1px solid var(--border); color:var(--accent); padding:3px 7px; font-size:12px; border-radius:6px; }
   #tone-test.on { background:var(--accent); color:#000; }
 </style>
 </head>
@@ -156,6 +157,8 @@
       <button id="mode-detail" class="ghost" onclick="setSensMode('detail')" title="Sens principal, puis les autres sens entre parenthèses">Détaillé</button>
       <span style="font-size:12px;">Touche le sens sous un mot pour changer de nuance.</span>
     </div>
+    <button style="margin-top:10px;" onclick="speakCurrent()" title="Écoute la phrase (réglages de voix dans Configuration)">🗣️ Écouter la phrase</button>
+    <button class="secondary" style="margin-top:10px;" onclick="speakCurrent(true)" title="Lecture lente">🐢 Lent</button>
     <button style="margin-top:10px;" onclick="toneForPhrase()" title="Explication des tons, syllabe par syllabe">🔊 Pourquoi ces tons ? (phrase entière)</button>
     <button class="claude-btn" style="margin-top:10px;" onclick="askClaudePhrase()" title="Copie une demande toute prête à coller dans Claude">🤖 Demander à Claude de vérifier</button>
     <button class="claude-btn" style="margin-top:10px;" onclick="pasteAvis(null)" title="Colle la réponse de Claude : elle sera rangée avec la phrase quand tu l'enregistres">📥 Coller le verdict de Claude</button>
@@ -184,6 +187,9 @@
   <div id="reader-out"></div>
   <div id="reader-detail"></div>
   <div id="reader-actions" style="display:none; gap:8px; flex-wrap:wrap; margin-top:12px;">
+    <button onclick="speakReaderAll()">🗣️ Écouter le texte</button>
+    <button class="secondary" onclick="speakReaderAll(true)">🐢 Lent</button>
+    <button class="ghost" onclick="stopSpeak()">⏹ Stop</button>
     <button class="claude-btn" onclick="askClaudeUnknownAll()">🤖 Demander les mots inconnus à Claude</button>
     <button class="claude-btn" onclick="askClaudeTranslate()">🤖 Demander la traduction du texte</button>
     <button class="claude-btn" onclick="pasteAndImport()">📥 Coller la réponse de Claude et importer</button>
@@ -275,6 +281,17 @@
     <button onclick="toneReport()">Lancer le rapport</button>
     <div id="tone-report" style="margin-top:10px;"></div>
   </div>
+  <div class="import-block">
+    <h3>🗣️ Prononciation (voix de synthèse)</h3>
+    <p>Les boutons 🗣️ lisent le thaï avec une voix de ton appareil. C'est une voix de synthèse : les tons sont en général justes mais pas toujours, et elle ne remplace pas ton prof.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <label>Voix <select id="tts-voice" onchange="ttsSave()"></select></label>
+      <label>Vitesse <select id="tts-rate" onchange="ttsSave()"><option value="1">Normale</option><option value="0.85">Un peu lente</option><option value="0.7">Lente</option></select></label>
+      <button onclick="speakThai('สวัสดีครับ ผมชื่อ')">▶ Tester</button>
+    </div>
+    <div id="tts-state" style="color:var(--muted); font-size:13px; margin-top:8px;"></div>
+  </div>
+
   <div class="import-block">
     <h3>📱 Importer des fichiers (téléphone ou ordinateur)</h3>
     <p>Choisis un ou plusieurs fichiers : le lexique exporté, les phrases, les règles de grammaire, ou le fichier « tout-en-un ». L'outil reconnaît tout seul le contenu. Le lexique est ensuite gardé dans cet appareil : tu n'as pas à le recharger à chaque ouverture.</p>
@@ -773,7 +790,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
         return;
       }
       const color = grammarConfig.CAT_COLORS[w.cat] || '#64748b';
-      box.innerHTML += `<div class="token" style="border-color:${color}"><span class="del" onclick="removeWord(${i})">×</span><span class="role" style="color:${color}">${w.cat}</span><span class="th" style="color:${color}" onclick="showAlternatives(${i})" title="Touche le mot thaï pour voir d'autres mots possibles à cette place">${w.thai}</span><span class="ro">${w.rom}</span><button class="tonebtn" onclick="showTone([{thai:currentPhrase[${i}].thai,rom:currentPhrase[${i}].rom}])" title="Pourquoi ce ton ?">🔊</button><span class="se" onclick="cycleSense(${i})" title="${esc(w.sens)}">${esc(senseText(w))}${glossList(w).length > 1 ? ' <small>' + (w.sp === -1 ? 'tous' : ((w.sp || 0) + 1) + '/' + glossList(w).length) + '</small>' : ''}</span></div>`;
+      box.innerHTML += `<div class="token" style="border-color:${color}"><span class="del" onclick="removeWord(${i})">×</span><span class="role" style="color:${color}">${w.cat}</span><span class="th" style="color:${color}" onclick="showAlternatives(${i})" title="Touche le mot thaï pour voir d'autres mots possibles à cette place">${w.thai}</span><span class="ro">${w.rom}</span><button class="spk" onclick="speakThai(currentPhrase[${i}].thai)" title="Écouter">🗣️</button><button class="tonebtn" onclick="showTone([{thai:currentPhrase[${i}].thai,rom:currentPhrase[${i}].rom}])" title="Pourquoi ce ton ?">🔊</button><span class="se" onclick="cycleSense(${i})" title="${esc(w.sens)}">${esc(senseText(w))}${glossList(w).length > 1 ? ' <small>' + (w.sp === -1 ? 'tous' : ((w.sp || 0) + 1) + '/' + glossList(w).length) + '</small>' : ''}</span></div>`;
     });
     res.style.display = "block";
     // Découpe la phrase en segments séparés par les coupures __SPACE__ pour un rendu propre.
@@ -910,7 +927,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
         <div class="thai-line">${p.thai}</div>
         <div class="rom-line">${p.rom}</div>
         <div>${esc(phraseSens(p))}</div>
-        ${p.tokens ? `<button class="tonebtn" onclick="toneForSavedPhrase('${p.id}')">🔊 Pourquoi ces tons ?</button>` : ''}
+        <button class="spk" onclick="speakSaved('${p.id}')">🗣️ Écouter</button> <button class="spk" onclick="speakSaved('${p.id}',true)">🐢 Lent</button> ${p.tokens ? `<button class="tonebtn" onclick="toneForSavedPhrase('${p.id}')">🔊 Pourquoi ces tons ?</button>` : ''}
         ${p.note ? `<div class="note">📝 ${p.note}</div>` : ''}
         ${p.avis ? `<div class="avis"><small>🤖 Avis de Claude du ${new Date(p.avisDate || p.date).toLocaleDateString('fr-FR')} · proposé, non validé par le prof <button class="ghost" style="padding:2px 8px; font-size:11px;" onclick="removeAvis('${p.id}')">Retirer</button></small>${esc(p.avis)}</div>` : ''}
         <div style="margin-top:8px;"><button class="claude-btn" style="padding:5px 10px; font-size:12px;" onclick="pasteAvis('${p.id}')">${p.avis ? '🔁 Remplacer' : '📥 Coller'} l'avis de Claude</button></div>
@@ -1016,7 +1033,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
       .map(w => {
         const color = grammarConfig.CAT_COLORS[w.cat] || '#666';
         const badge = w.type === "collocation" ? '🧩 ' : '';
-        return `<tr><td style="font-weight:bold; color:${color}">${badge}${w.thai}</td><td><span class="badge" style="background:${color}">${w.cat}</span></td><td>${lexCell(w)}</td><td style="white-space:nowrap;"><button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="toneForLex('${w.id}')" title="Pourquoi ce ton ?">🔊</button> <button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="editWordFromLexicon('${w.id}')">✏️</button> <button class="danger" onclick="deleteWord('${w.id}')">×</button></td></tr>`;
+        return `<tr><td style="font-weight:bold; color:${color}">${badge}${w.thai}</td><td><span class="badge" style="background:${color}">${w.cat}</span></td><td>${lexCell(w)}</td><td style="white-space:nowrap;"><button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="speakLex('${w.id}')" title="Écouter">🗣️</button> <button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="toneForLex('${w.id}')" title="Pourquoi ce ton ?">🔊</button> <button class="secondary" style="padding:5px 8px; font-size:12px;" onclick="editWordFromLexicon('${w.id}')">✏️</button> <button class="danger" onclick="deleteWord('${w.id}')">×</button></td></tr>`;
       });
     lexAll = rows; lexShown = Math.min(lexLimit, rows.length);
     tbody.innerHTML = rows.slice(0, lexShown).join("") + lexMoreRow();
@@ -1575,7 +1592,7 @@ Réponds UNIQUEMENT avec un tableau JSON dans un bloc de code (rien après), un 
     readerSel = i; renderReader();
     const tk = readerTokens[i], box = document.getElementById("reader-detail");
     const head = `<div style="font-size:26px; margin:10px 0 4px;">${esc(tk.t)}</div>`;
-    const toneB = `<div style="margin:8px 0;"><button onclick="toneForReader(${i})">🔊 Pourquoi ce ton ?</button> <button class="secondary" onclick="toneForReaderAll()">🔊 Tout le texte</button></div>`;
+    const toneB = `<div style="margin:8px 0;"><button onclick="speakThai(readerTokens[${i}].t)">🗣️ Écouter</button> <button onclick="toneForReader(${i})">🔊 Pourquoi ce ton ?</button> <button class="secondary" onclick="toneForReaderAll()">🔊 Tout le texte</button></div>`;
     if (tk.entries && tk.entries.length) { box.innerHTML = head + tk.entries.map(entryHTML).join("") + toneB; return; }
     box.innerHTML = head + `<p style="color:var(--muted); margin-bottom:10px;">Ce mot n'est pas dans ton lexique (ou le découpage l'a coupé). Tu peux demander sa fiche à Claude, en lui donnant la phrase d'où il vient.</p><button class="claude-btn" onclick="askClaudeUnknown(${i})">🤖 Demander ce mot à Claude</button>` + toneB;
   }
@@ -2006,6 +2023,87 @@ const ThaiTone = (() => {
   function closeTone() { document.getElementById("tone-modal").style.display = "none"; }
   function toggleToneTest() { toneTest = !toneTest; toneAnswered = {}; renderToneModal(); }
   function toneGuess(key, t, good) { toneAnswered[key] = { t, ok: t === good }; renderToneModal(); }
+
+  // ===== Prononciation (synthèse vocale du navigateur, repli Google en ligne) =====
+  const TTS_KEY = "thai_tts_v1";
+  let ttsPrefs = { voice: "", rate: 0.85 };
+  try { Object.assign(ttsPrefs, JSON.parse(localStorage.getItem(TTS_KEY) || "{}")); } catch (e) {}
+  let ttsVoices = [], ttsAudio = null, ttsToken = 0;
+  function ttsLoad() {
+    if (!window.speechSynthesis) { ttsVoices = []; ttsRefreshUI(); return; }
+    ttsVoices = speechSynthesis.getVoices().filter(v => /^th([-_]|$)/i.test(v.lang));
+    ttsRefreshUI();
+  }
+  function ttsRefreshUI() {
+    const sel = document.getElementById("tts-voice"), st = document.getElementById("tts-state");
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Automatique</option>' + ttsVoices.map(v => `<option value="${esc(v.name)}"${v.name === ttsPrefs.voice ? " selected" : ""}>${esc(v.name)}</option>`).join("");
+    document.getElementById("tts-rate").value = String(ttsPrefs.rate);
+    st.textContent = ttsVoices.length
+      ? ttsVoices.length + " voix thaï trouvée(s) sur cet appareil."
+      : "Aucune voix thaï sur cet appareil. L'outil utilisera alors une voix en ligne (Google), qui demande Internet. Pour l'avoir hors-ligne : sur Android, installe « Synthèse vocale Google » + la voix thaï ; sur Windows, Paramètres › Heure et langue › Voix (ajoute le thaï).";
+  }
+  function ttsSave() {
+    ttsPrefs.voice = document.getElementById("tts-voice").value;
+    ttsPrefs.rate = parseFloat(document.getElementById("tts-rate").value) || 0.85;
+    try { localStorage.setItem(TTS_KEY, JSON.stringify(ttsPrefs)); } catch (e) {}
+  }
+  function stopSpeak() {
+    ttsToken++;
+    try { speechSynthesis.cancel(); } catch (e) {}
+    if (ttsAudio) { try { ttsAudio.pause(); } catch (e) {} ttsAudio = null; }
+  }
+  // Découpe en morceaux courts (les voix coupent les textes trop longs)
+  function ttsChunks(text, max) {
+    const parts = []; String(text).split(/\s+/).filter(x => x.trim()).forEach(x => { while (x.length > max) { parts.push(x.slice(0, max)); x = x.slice(max); } parts.push(x); });
+    const out = []; let cur = "";
+    parts.forEach(p => { if (cur && (cur + " " + p).length > max) { out.push(cur); cur = p; } else cur = cur ? cur + " " + p : p; });
+    if (cur) out.push(cur);
+    return out;
+  }
+  function speakThai(text, slow) {
+    text = String(text || "").replace(/[​-‍]/g, "").trim();
+    if (!text || !/[฀-๿]/.test(text)) { showToast("Rien à lire."); return; }
+    stopSpeak();
+    const my = ttsToken;
+    const rate = slow ? Math.min(0.6, ttsPrefs.rate) : ttsPrefs.rate;
+    const chunks = ttsChunks(text, 120);
+    if (window.speechSynthesis && (ttsVoices.length || /android/i.test(navigator.userAgent))) {
+      const voice = ttsVoices.find(v => v.name === ttsPrefs.voice) || ttsVoices.find(v => v.localService) || ttsVoices[0];
+      let n = 0, started = false;
+      const next = () => {
+        if (my !== ttsToken || n >= chunks.length) return;
+        const u = new SpeechSynthesisUtterance(chunks[n++]);
+        u.lang = "th-TH"; if (voice) u.voice = voice; u.rate = rate;
+        u.onstart = () => { started = true; };
+        u.onend = next;
+        u.onerror = e => { if (my === ttsToken && e.error !== "interrupted" && e.error !== "canceled") { if (!started) speakOnline(chunks, rate, my); } };
+        speechSynthesis.speak(u);
+      };
+      next();
+      return;
+    }
+    speakOnline(chunks, rate, my);
+  }
+  function speakOnline(chunks, rate, my) {
+    if (!navigator.onLine) { showToast("Pas de voix thaï sur cet appareil et pas d'Internet. Voir Configuration › Prononciation."); return; }
+    let n = 0;
+    const next = () => {
+      if (my !== ttsToken || n >= chunks.length) return;
+      const a = new Audio("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=th&ttsspeed=" + (rate < 0.8 ? "0.3" : "1") + "&q=" + encodeURIComponent(chunks[n++].slice(0, 190)));
+      ttsAudio = a; a.onended = next;
+      a.onerror = () => showToast("Voix en ligne indisponible. Voir Configuration › Prononciation.");
+      a.play().catch(() => showToast("Lecture bloquée. Voir Configuration › Prononciation."));
+    };
+    next();
+  }
+  function speakLex(id) { const w = lexicon.find(x => x.id === id); if (w) speakThai(w.thai); }
+  function speakCurrent(slow) { speakThai(document.getElementById("res-th").textContent, slow); }
+  function speakSaved(id, slow) { const p = savedPhrases.find(x => x.id === id); if (p) speakThai(p.thai, slow); }
+  function speakReaderAll(slow) { speakThai(document.getElementById("reader-text").value, slow); }
+  if (window.speechSynthesis) { ttsLoad(); speechSynthesis.onvoiceschanged = ttsLoad; }
+  document.addEventListener("DOMContentLoaded", ttsRefreshUI);
+
   function toneForLex(id) { const w = lexicon.find(x => x.id === id); if (w) showTone([{ thai: w.thai, rom: w.rom }]); }
   function toneForPhrase() {
     showTone(currentPhrase.filter(w => w.cat !== "__SPACE__").map(w => ({ thai: w.thai, rom: w.rom })));
