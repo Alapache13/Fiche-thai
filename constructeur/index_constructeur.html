@@ -66,6 +66,10 @@
   th { color: var(--muted); }
   #lexicon-table td { overflow-wrap: anywhere; word-break: break-word; }
   textarea { width: 100%; height: 120px; font-family: monospace; margin-bottom: 10px; }
+  #loupe { position: fixed; z-index: 3000; width: 170px; height: 170px; border-radius: 50%; background: var(--card, #1e293b); color: var(--text); border: 3px solid var(--accent); box-shadow: 0 6px 24px rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; font-size: 46px; line-height: 1.6; white-space: nowrap; font-family: "Noto Sans Thai", "Tahoma", "Leelawadee UI", system-ui, sans-serif; }
+  #loupe b { color: var(--accent); font-weight: normal; background: rgba(125,125,125,.25); border-radius: 6px; }
+  #loupe-btn { position: fixed; left: 14px; bottom: 14px; z-index: 2000; width: 48px; height: 48px; border-radius: 50%; padding: 0; font-size: 22px; background: var(--card, #1e293b); color: var(--text); border: 2px solid var(--border); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  #loupe-btn.on { background: var(--accent); color: #000; border-color: var(--accent); }
   .toast { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: black; padding: 10px 20px; border-radius: 6px; font-weight: bold; z-index: 1000; }
   .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; color: white; }
   .phrase-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 12px; }
@@ -286,6 +290,7 @@
     <p>Les boutons 🗣️ lisent le thaï avec une voix de ton appareil. C'est une voix de synthèse : les tons sont en général justes mais pas toujours, et elle ne remplace pas ton prof.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
       <label>Voix <select id="tts-voice" onchange="ttsSave()"></select></label>
+      <label>Textes et phrases <select id="tts-mode" onchange="ttsSave()"><option value="mots">Mot par mot (belle voix)</option><option value="fluide">Lecture fluide (voix de l'appareil)</option></select></label>
       <label>Vitesse <select id="tts-rate" onchange="ttsSave()"><option value="1">Normale</option><option value="0.85">Un peu lente</option><option value="0.7">Lente</option></select></label>
       <button onclick="speakThai('สวัสดีครับ ผมชื่อ')">▶ Tester</button>
     </div>
@@ -2026,7 +2031,7 @@ const ThaiTone = (() => {
 
   // ===== Prononciation (synthèse vocale du navigateur, repli Google en ligne) =====
   const TTS_KEY = "thai_tts_v1";
-  let ttsPrefs = { voice: "", rate: 0.85 };
+  let ttsPrefs = { voice: "", rate: 0.85, mode: "mots" };
   try { Object.assign(ttsPrefs, JSON.parse(localStorage.getItem(TTS_KEY) || "{}")); } catch (e) {}
   let ttsVoices = [], ttsAudio = null, ttsToken = 0;
   function ttsLoad() {
@@ -2039,6 +2044,7 @@ const ThaiTone = (() => {
     if (!sel) return;
     sel.innerHTML = '<option value="">Automatique</option>' + ttsVoices.map(v => `<option value="${esc(v.name)}"${v.name === ttsPrefs.voice ? " selected" : ""}>${esc(v.name)}</option>`).join("");
     document.getElementById("tts-rate").value = String(ttsPrefs.rate);
+    document.getElementById("tts-mode").value = ttsPrefs.mode || "mots";
     st.textContent = (audioKeys.size ? audioKeys.size + " fichiers audio préparés (voix neuronale) : lus en priorité. " : "") + (ttsVoices.length
       ? ttsVoices.length + " voix thaï trouvée(s) sur cet appareil."
       : "Aucune voix thaï sur cet appareil. L'outil utilisera alors une voix en ligne (Google), qui demande Internet. Pour l'avoir hors-ligne : sur Android, installe « Synthèse vocale Google » + la voix thaï ; sur Windows, Paramètres › Heure et langue › Voix (ajoute le thaï).");
@@ -2046,6 +2052,7 @@ const ThaiTone = (() => {
   function ttsSave() {
     ttsPrefs.voice = document.getElementById("tts-voice").value;
     ttsPrefs.rate = parseFloat(document.getElementById("tts-rate").value) || 0.85;
+    ttsPrefs.mode = document.getElementById("tts-mode").value;
     try { localStorage.setItem(TTS_KEY, JSON.stringify(ttsPrefs)); } catch (e) {}
   }
   function stopSpeak() {
@@ -2073,7 +2080,7 @@ const ThaiTone = (() => {
     fetch("audio/index.json").then(r => r.ok ? r.json() : []).then(a => { audioKeys = new Set(a); ttsRefreshUI(); }).catch(() => {});
   }
   // Dossier « audio_thai » : fichiers nommés d'après le texte thaï (ex. audio_thai/มุม.mp3 ou .wav)
-  const audioMissing = new Set();
+  const audioMissing = new Set(), audioHas = new Map();
   function audioCandidates(text) {
     const out = [], key = audioKey(text);
     if (audioKeys.has(key)) out.push("audio/" + key + ".mp3");
@@ -2082,60 +2089,158 @@ const ThaiTone = (() => {
     names.forEach(n => ["mp3", "wav"].forEach(ext => out.push("audio_thai/" + encodeURIComponent(n) + "." + ext)));
     return out.filter(u => !audioMissing.has(u));
   }
-  function speakThai(text, slow) {
+  // Vérifie qu'un fichier son existe vraiment (et que ce n'est pas la page d'accueil renvoyée hors-ligne)
+  async function probeUrl(u) {
+    if (audioHas.has(u)) return audioHas.get(u);
+    let ok = false;
+    try { const r = await fetch(u); ok = r.ok && /audio|octet-stream/i.test(r.headers.get("content-type") || ""); try { r.body && r.body.cancel(); } catch (e) {} } catch (e) {}
+    audioHas.set(u, ok); if (!ok) audioMissing.add(u);
+    return ok;
+  }
+  async function findAudio(text) {
+    for (const u of audioCandidates(text)) if (await probeUrl(u)) return u;
+    return null;
+  }
+  function playUrl(u, slow, my) {
+    return new Promise(res => {
+      if (my !== ttsToken) return res();
+      const a = new Audio(u); a.playbackRate = slow ? 0.7 : 1; ttsAudio = a;
+      a.onended = res; a.onerror = () => { audioMissing.add(u); res(); };
+      a.play().catch(() => res());
+    });
+  }
+  function synth(text, slow, my) {
+    return new Promise(res => {
+      const rate = slow ? Math.min(0.6, ttsPrefs.rate) : ttsPrefs.rate;
+      const chunks = ttsChunks(text, 120);
+      if (window.speechSynthesis && (ttsVoices.length || /android/i.test(navigator.userAgent))) {
+        const voice = ttsVoices.find(v => v.name === ttsPrefs.voice) || ttsVoices.find(v => v.localService) || ttsVoices[0];
+        let n = 0, started = false;
+        const next = () => {
+          if (my !== ttsToken || n >= chunks.length) return res();
+          const u = new SpeechSynthesisUtterance(chunks[n++]);
+          u.lang = "th-TH"; if (voice) u.voice = voice; u.rate = rate;
+          u.onstart = () => { started = true; };
+          u.onend = next;
+          u.onerror = e => { if (my === ttsToken && e.error !== "interrupted" && e.error !== "canceled" && !started) speakOnline(chunks, rate, my, res); else res(); };
+          speechSynthesis.speak(u);
+        };
+        next();
+        return;
+      }
+      speakOnline(chunks, rate, my, res);
+    });
+  }
+  function speakOnline(chunks, rate, my, done) {
+    if (!navigator.onLine) { showToast("Pas de voix thaï sur cet appareil et pas d'Internet. Voir Configuration › Prononciation."); return done && done(); }
+    let n = 0;
+    const next = () => {
+      if (my !== ttsToken || n >= chunks.length) return done && done();
+      const a = new Audio("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=th&ttsspeed=" + (rate < 0.8 ? "0.3" : "1") + "&q=" + encodeURIComponent(chunks[n++].slice(0, 190)));
+      ttsAudio = a; a.onended = next;
+      a.onerror = () => { showToast("Voix en ligne indisponible. Voir Configuration › Prononciation."); done && done(); };
+      a.play().catch(() => { showToast("Lecture bloquée. Voir Configuration › Prononciation."); done && done(); });
+    };
+    next();
+  }
+  // Lit un texte : fichier son du texte entier s'il existe ; sinon, mot par mot avec les fichiers (parts) ; sinon voix de synthèse.
+  // parts = liste de mots (texte) ou de pauses (null).
+  async function speakThai(text, slow, parts) {
     text = String(text || "").replace(/[​-‍]/g, "").trim();
     if (!text || !/[฀-๿]/.test(text)) { showToast("Rien à lire."); return; }
     stopSpeak();
     const my = ttsToken;
-    const cands = audioCandidates(text);
-    if (cands.length) {
-      const tryNext = () => {
-        if (my !== ttsToken) return;
-        const url = cands.shift();
-        if (!url) { speakThai(text, slow); return; }
-        const a = new Audio(url);
-        a.playbackRate = slow ? 0.7 : 1; ttsAudio = a;
-        a.onerror = () => { audioMissing.add(url); tryNext(); };
-        a.play().catch(() => { if (my === ttsToken && ttsAudio === a && a.error) { audioMissing.add(url); tryNext(); } });
-      };
-      tryNext();
-      return;
+    const url = await findAudio(text);
+    if (my !== ttsToken) return;
+    if (url) { await playUrl(url, slow, my); return; }
+    const words = ttsPrefs.mode === "fluide" ? [] : (parts || []).filter(p => p === null || /[฀-๿]/.test(p));
+    if (words.filter(p => p !== null).length > 1) {
+      const urls = await Promise.all(words.map(p => p === null ? null : findAudio(p)));
+      if (my !== ttsToken) return;
+      if (urls.some(u => u)) {
+        let pending = [];
+        const flush = async () => { if (pending.length) { const t = pending.join(" "); pending = []; await synth(t, slow, my); } };
+        for (let k = 0; k < words.length && my === ttsToken; k++) {
+          if (words[k] === null) { await flush(); await new Promise(r => setTimeout(r, 250)); }
+          else if (urls[k]) { await flush(); await playUrl(urls[k], slow, my); }
+          else pending.push(words[k]);
+        }
+        await flush();
+        return;
+      }
     }
-    const rate = slow ? Math.min(0.6, ttsPrefs.rate) : ttsPrefs.rate;
-    const chunks = ttsChunks(text, 120);
-    if (window.speechSynthesis && (ttsVoices.length || /android/i.test(navigator.userAgent))) {
-      const voice = ttsVoices.find(v => v.name === ttsPrefs.voice) || ttsVoices.find(v => v.localService) || ttsVoices[0];
-      let n = 0, started = false;
-      const next = () => {
-        if (my !== ttsToken || n >= chunks.length) return;
-        const u = new SpeechSynthesisUtterance(chunks[n++]);
-        u.lang = "th-TH"; if (voice) u.voice = voice; u.rate = rate;
-        u.onstart = () => { started = true; };
-        u.onend = next;
-        u.onerror = e => { if (my === ttsToken && e.error !== "interrupted" && e.error !== "canceled") { if (!started) speakOnline(chunks, rate, my); } };
-        speechSynthesis.speak(u);
-      };
-      next();
-      return;
-    }
-    speakOnline(chunks, rate, my);
+    await synth(text, slow, my);
   }
-  function speakOnline(chunks, rate, my) {
-    if (!navigator.onLine) { showToast("Pas de voix thaï sur cet appareil et pas d'Internet. Voir Configuration › Prononciation."); return; }
-    let n = 0;
-    const next = () => {
-      if (my !== ttsToken || n >= chunks.length) return;
-      const a = new Audio("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=th&ttsspeed=" + (rate < 0.8 ? "0.3" : "1") + "&q=" + encodeURIComponent(chunks[n++].slice(0, 190)));
-      ttsAudio = a; a.onended = next;
-      a.onerror = () => showToast("Voix en ligne indisponible. Voir Configuration › Prononciation.");
-      a.play().catch(() => showToast("Lecture bloquée. Voir Configuration › Prononciation."));
-    };
-    next();
+  function partsFromTokens(list) { // list de textes ; "" ou null = pause
+    const out = [];
+    list.forEach(t => { if (!t || !String(t).trim()) { if (out.length && out[out.length - 1] !== null) out.push(null); } else out.push(String(t).trim()); });
+    return out;
   }
   function speakLex(id) { const w = lexicon.find(x => x.id === id); if (w) speakThai(w.thai); }
-  function speakCurrent(slow) { speakThai(document.getElementById("res-th").textContent, slow); }
-  function speakSaved(id, slow) { const p = savedPhrases.find(x => x.id === id); if (p) speakThai(p.thai, slow); }
-  function speakReaderAll(slow) { speakThai(document.getElementById("reader-text").value, slow); }
+  function speakCurrent(slow) { speakThai(document.getElementById("res-th").textContent, slow, partsFromTokens(currentPhrase.map(w => w.cat === "__SPACE__" ? null : w.thai))); }
+  function speakSaved(id, slow) { const p = savedPhrases.find(x => x.id === id); if (p) speakThai(p.thai, slow, p.tokens ? partsFromTokens(p.tokens.map(w => w.cat === "__SPACE__" ? null : w.thai)) : null); }
+  function speakReaderAll(slow) {
+    const txt = document.getElementById("reader-text").value;
+    const parts = readerTokens.length ? partsFromTokens(readerTokens.map(t => t.plain ? (/\s/.test(t.t) ? null : "") : t.t).filter(t => t !== "")) : null;
+    speakThai(txt, slow, parts);
+  }
+
+  // ===== Loupe : agrandit les lettres sous le curseur (ou le doigt) =====
+  const LOUPE_KEY = "thai_loupe_v1";
+  let loupeOn = false;
+  try { loupeOn = localStorage.getItem(LOUPE_KEY) === "1"; } catch (e) {}
+  const isMark = c => /[ัิ-ฺ็-๎]/.test(c);
+  function toggleLoupe() {
+    loupeOn = !loupeOn;
+    try { localStorage.setItem(LOUPE_KEY, loupeOn ? "1" : "0"); } catch (e) {}
+    document.getElementById("loupe-btn").classList.toggle("on", loupeOn);
+    if (!loupeOn) hideLoupe();
+    showToast(loupeOn ? "Loupe activée : survole ou touche un mot." : "Loupe désactivée.");
+  }
+  function hideLoupe() { document.getElementById("loupe").style.display = "none"; }
+  function loupeAt(x, y, offsetUp) {
+    if (!loupeOn) return;
+    let node = null, off = 0;
+    if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); if (p) { node = p.offsetNode; off = p.offset; } }
+    else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (r) { node = r.startContainer; off = r.startOffset; } }
+    if (!node || node.nodeType !== 3 || !/[฀-๿]/.test(node.data)) return hideLoupe();
+    const t = node.data;
+    // le caret tombe entre deux lettres : on prend la lettre la plus proche du curseur
+    let i = Math.min(off, t.length - 1);
+    try {
+      const rg = document.createRange(); let best = 1e9, bi = i;
+      for (let k = Math.max(0, i - 2); k <= Math.min(t.length - 1, i + 1); k++) {
+        rg.setStart(node, k); rg.setEnd(node, k + 1);
+        const b = rg.getBoundingClientRect();
+        if (!b.width && !b.height) continue;
+        const d = (x < b.left ? b.left - x : x > b.right ? x - b.right : 0) + (y < b.top ? b.top - y : y > b.bottom ? y - b.bottom : 0);
+        if (d < best) { best = d; bi = k; }
+      }
+      i = bi;
+    } catch (e) {}
+    while (i > 0 && isMark(t[i])) i--;                    // remonte à la consonne de base
+    const cl = []; // groupes : consonne + signes qui l'accompagnent
+    let a = i; for (let n = 0; n < 2 && a > 0; n++) { a--; while (a > 0 && isMark(t[a])) a--; }
+    let k = a;
+    while (k < t.length && cl.length < 5 + (i - a > 0 ? 0 : 0)) {
+      let e = k + 1; while (e < t.length && isMark(t[e])) e++;
+      cl.push({ s: t.slice(k, e), hit: k === i }); k = e;
+      if (k > i && cl.length >= 4 && k - i > 6) break;
+    }
+    const box = document.getElementById("loupe");
+    box.innerHTML = cl.map(c => c.hit ? "<b>" + esc(c.s) + "</b>" : esc(c.s)).join("");
+    const W = 170;
+    box.style.display = "flex";
+    box.style.left = Math.max(4, Math.min(innerWidth - W - 4, x - W / 2)) + "px";
+    box.style.top = Math.max(4, y - W - (offsetUp || 18)) + "px";
+  }
+  document.addEventListener("mousemove", e => { if (loupeOn) loupeAt(e.clientX, e.clientY, 14); });
+  document.addEventListener("mouseleave", hideLoupe);
+  document.addEventListener("touchstart", e => { if (loupeOn && e.touches[0]) loupeAt(e.touches[0].clientX, e.touches[0].clientY, 40); }, { passive: true });
+  document.addEventListener("touchmove", e => { if (loupeOn && e.touches[0]) loupeAt(e.touches[0].clientX, e.touches[0].clientY, 40); }, { passive: true });
+  document.addEventListener("touchend", hideLoupe);
+  document.addEventListener("keydown", e => { if (e.key === "F4") { e.preventDefault(); toggleLoupe(); } });
+  document.addEventListener("DOMContentLoaded", () => document.getElementById("loupe-btn").classList.toggle("on", loupeOn));
   if (window.speechSynthesis) { ttsLoad(); speechSynthesis.onvoiceschanged = ttsLoad; }
   document.addEventListener("DOMContentLoaded", () => { ttsRefreshUI(); loadAudioIndex(); });
 
@@ -2194,5 +2299,7 @@ const ThaiTone = (() => {
     if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register("sw.js").catch(() => {});
   };
 </script>
+<button id="loupe-btn" onclick="toggleLoupe()" title="Loupe : survole ou touche un mot pour l'agrandir (touche F4)" aria-label="Loupe">🔍</button>
+<div id="loupe"></div>
 </body>
 </html>
