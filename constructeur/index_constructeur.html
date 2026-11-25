@@ -2039,9 +2039,9 @@ const ThaiTone = (() => {
     if (!sel) return;
     sel.innerHTML = '<option value="">Automatique</option>' + ttsVoices.map(v => `<option value="${esc(v.name)}"${v.name === ttsPrefs.voice ? " selected" : ""}>${esc(v.name)}</option>`).join("");
     document.getElementById("tts-rate").value = String(ttsPrefs.rate);
-    st.textContent = ttsVoices.length
+    st.textContent = (audioKeys.size ? audioKeys.size + " fichiers audio préparés (voix neuronale) : lus en priorité. " : "") + (ttsVoices.length
       ? ttsVoices.length + " voix thaï trouvée(s) sur cet appareil."
-      : "Aucune voix thaï sur cet appareil. L'outil utilisera alors une voix en ligne (Google), qui demande Internet. Pour l'avoir hors-ligne : sur Android, installe « Synthèse vocale Google » + la voix thaï ; sur Windows, Paramètres › Heure et langue › Voix (ajoute le thaï).";
+      : "Aucune voix thaï sur cet appareil. L'outil utilisera alors une voix en ligne (Google), qui demande Internet. Pour l'avoir hors-ligne : sur Android, installe « Synthèse vocale Google » + la voix thaï ; sur Windows, Paramètres › Heure et langue › Voix (ajoute le thaï).");
   }
   function ttsSave() {
     ttsPrefs.voice = document.getElementById("tts-voice").value;
@@ -2061,11 +2061,46 @@ const ThaiTone = (() => {
     if (cur) out.push(cur);
     return out;
   }
+  // Fichiers audio préparés (dossier audio/, créé par le script) : clé = empreinte du texte sans espaces
+  let audioKeys = new Set();
+  function audioKey(text) {
+    const b = new TextEncoder().encode(String(text).replace(/[\s\u200B-\u200D]+/g, ""));
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (const x of b) { h1 = Math.imul(h1 ^ x, 0x01000193) >>> 0; h2 = Math.imul(h2 ^ x, 0x85ebca6b) >>> 0; }
+    return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+  }
+  function loadAudioIndex() {
+    fetch("audio/index.json").then(r => r.ok ? r.json() : []).then(a => { audioKeys = new Set(a); ttsRefreshUI(); }).catch(() => {});
+  }
+  // Dossier « audio_thai » : fichiers nommés d'après le texte thaï (ex. audio_thai/มุม.mp3 ou .wav)
+  const audioMissing = new Set();
+  function audioCandidates(text) {
+    const out = [], key = audioKey(text);
+    if (audioKeys.has(key)) out.push("audio/" + key + ".mp3");
+    const clean = t => t.replace(/[\\/*?:"<>|]/g, "").trim().slice(0, 100);
+    const names = [...new Set([clean(text), clean(text.replace(/\s+/g, ""))])].filter(Boolean);
+    names.forEach(n => ["mp3", "wav"].forEach(ext => out.push("audio_thai/" + encodeURIComponent(n) + "." + ext)));
+    return out.filter(u => !audioMissing.has(u));
+  }
   function speakThai(text, slow) {
     text = String(text || "").replace(/[​-‍]/g, "").trim();
     if (!text || !/[฀-๿]/.test(text)) { showToast("Rien à lire."); return; }
     stopSpeak();
     const my = ttsToken;
+    const cands = audioCandidates(text);
+    if (cands.length) {
+      const tryNext = () => {
+        if (my !== ttsToken) return;
+        const url = cands.shift();
+        if (!url) { speakThai(text, slow); return; }
+        const a = new Audio(url);
+        a.playbackRate = slow ? 0.7 : 1; ttsAudio = a;
+        a.onerror = () => { audioMissing.add(url); tryNext(); };
+        a.play().catch(() => { if (my === ttsToken && ttsAudio === a && a.error) { audioMissing.add(url); tryNext(); } });
+      };
+      tryNext();
+      return;
+    }
     const rate = slow ? Math.min(0.6, ttsPrefs.rate) : ttsPrefs.rate;
     const chunks = ttsChunks(text, 120);
     if (window.speechSynthesis && (ttsVoices.length || /android/i.test(navigator.userAgent))) {
@@ -2102,7 +2137,7 @@ const ThaiTone = (() => {
   function speakSaved(id, slow) { const p = savedPhrases.find(x => x.id === id); if (p) speakThai(p.thai, slow); }
   function speakReaderAll(slow) { speakThai(document.getElementById("reader-text").value, slow); }
   if (window.speechSynthesis) { ttsLoad(); speechSynthesis.onvoiceschanged = ttsLoad; }
-  document.addEventListener("DOMContentLoaded", ttsRefreshUI);
+  document.addEventListener("DOMContentLoaded", () => { ttsRefreshUI(); loadAudioIndex(); });
 
   function toneForLex(id) { const w = lexicon.find(x => x.id === id); if (w) showTone([{ thai: w.thai, rom: w.rom }]); }
   function toneForPhrase() {
