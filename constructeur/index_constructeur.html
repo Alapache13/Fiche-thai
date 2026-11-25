@@ -286,6 +286,7 @@
     <p>Les boutons 🗣️ lisent le thaï avec une voix de ton appareil. C'est une voix de synthèse : les tons sont en général justes mais pas toujours, et elle ne remplace pas ton prof.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
       <label>Voix <select id="tts-voice" onchange="ttsSave()"></select></label>
+      <label>Textes et phrases <select id="tts-mode" onchange="ttsSave()"><option value="mots">Mot par mot (belle voix)</option><option value="fluide">Lecture fluide (voix de l'appareil)</option></select></label>
       <label>Vitesse <select id="tts-rate" onchange="ttsSave()"><option value="1">Normale</option><option value="0.85">Un peu lente</option><option value="0.7">Lente</option></select></label>
       <button onclick="speakThai('สวัสดีครับ ผมชื่อ')">▶ Tester</button>
     </div>
@@ -2026,7 +2027,7 @@ const ThaiTone = (() => {
 
   // ===== Prononciation (synthèse vocale du navigateur, repli Google en ligne) =====
   const TTS_KEY = "thai_tts_v1";
-  let ttsPrefs = { voice: "", rate: 0.85 };
+  let ttsPrefs = { voice: "", rate: 0.85, mode: "mots" };
   try { Object.assign(ttsPrefs, JSON.parse(localStorage.getItem(TTS_KEY) || "{}")); } catch (e) {}
   let ttsVoices = [], ttsAudio = null, ttsToken = 0;
   function ttsLoad() {
@@ -2039,6 +2040,7 @@ const ThaiTone = (() => {
     if (!sel) return;
     sel.innerHTML = '<option value="">Automatique</option>' + ttsVoices.map(v => `<option value="${esc(v.name)}"${v.name === ttsPrefs.voice ? " selected" : ""}>${esc(v.name)}</option>`).join("");
     document.getElementById("tts-rate").value = String(ttsPrefs.rate);
+    document.getElementById("tts-mode").value = ttsPrefs.mode || "mots";
     st.textContent = (audioKeys.size ? audioKeys.size + " fichiers audio préparés (voix neuronale) : lus en priorité. " : "") + (ttsVoices.length
       ? ttsVoices.length + " voix thaï trouvée(s) sur cet appareil."
       : "Aucune voix thaï sur cet appareil. L'outil utilisera alors une voix en ligne (Google), qui demande Internet. Pour l'avoir hors-ligne : sur Android, installe « Synthèse vocale Google » + la voix thaï ; sur Windows, Paramètres › Heure et langue › Voix (ajoute le thaï).");
@@ -2046,6 +2048,7 @@ const ThaiTone = (() => {
   function ttsSave() {
     ttsPrefs.voice = document.getElementById("tts-voice").value;
     ttsPrefs.rate = parseFloat(document.getElementById("tts-rate").value) || 0.85;
+    ttsPrefs.mode = document.getElementById("tts-mode").value;
     try { localStorage.setItem(TTS_KEY, JSON.stringify(ttsPrefs)); } catch (e) {}
   }
   function stopSpeak() {
@@ -2146,7 +2149,7 @@ const ThaiTone = (() => {
     const url = await findAudio(text);
     if (my !== ttsToken) return;
     if (url) { await playUrl(url, slow, my); return; }
-    const words = (parts || []).filter(p => p === null || /[฀-๿]/.test(p));
+    const words = ttsPrefs.mode === "fluide" ? [] : (parts || []).filter(p => p === null || /[฀-๿]/.test(p));
     if (words.filter(p => p !== null).length > 1) {
       const urls = await Promise.all(words.map(p => p === null ? null : findAudio(p)));
       if (my !== ttsToken) return;
