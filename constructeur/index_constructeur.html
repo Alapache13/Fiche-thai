@@ -66,6 +66,10 @@
   th { color: var(--muted); }
   #lexicon-table td { overflow-wrap: anywhere; word-break: break-word; }
   textarea { width: 100%; height: 120px; font-family: monospace; margin-bottom: 10px; }
+  #loupe { position: fixed; z-index: 3000; width: 170px; height: 170px; border-radius: 50%; background: var(--card, #1e293b); color: var(--text); border: 3px solid var(--accent); box-shadow: 0 6px 24px rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; pointer-events: none; overflow: hidden; font-size: 46px; line-height: 1.6; white-space: nowrap; font-family: "Noto Sans Thai", "Tahoma", "Leelawadee UI", system-ui, sans-serif; }
+  #loupe b { color: var(--accent); font-weight: normal; background: rgba(125,125,125,.25); border-radius: 6px; }
+  #loupe-btn { position: fixed; left: 14px; bottom: 14px; z-index: 2000; width: 48px; height: 48px; border-radius: 50%; padding: 0; font-size: 22px; background: var(--card, #1e293b); color: var(--text); border: 2px solid var(--border); box-shadow: 0 2px 10px rgba(0,0,0,.35); }
+  #loupe-btn.on { background: var(--accent); color: #000; border-color: var(--accent); }
   .toast { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: black; padding: 10px 20px; border-radius: 6px; font-weight: bold; z-index: 1000; }
   .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; color: white; }
   .phrase-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-bottom: 12px; }
@@ -2180,6 +2184,63 @@ const ThaiTone = (() => {
     const parts = readerTokens.length ? partsFromTokens(readerTokens.map(t => t.plain ? (/\s/.test(t.t) ? null : "") : t.t).filter(t => t !== "")) : null;
     speakThai(txt, slow, parts);
   }
+
+  // ===== Loupe : agrandit les lettres sous le curseur (ou le doigt) =====
+  const LOUPE_KEY = "thai_loupe_v1";
+  let loupeOn = false;
+  try { loupeOn = localStorage.getItem(LOUPE_KEY) === "1"; } catch (e) {}
+  const isMark = c => /[ัิ-ฺ็-๎]/.test(c);
+  function toggleLoupe() {
+    loupeOn = !loupeOn;
+    try { localStorage.setItem(LOUPE_KEY, loupeOn ? "1" : "0"); } catch (e) {}
+    document.getElementById("loupe-btn").classList.toggle("on", loupeOn);
+    if (!loupeOn) hideLoupe();
+    showToast(loupeOn ? "Loupe activée : survole ou touche un mot." : "Loupe désactivée.");
+  }
+  function hideLoupe() { document.getElementById("loupe").style.display = "none"; }
+  function loupeAt(x, y, offsetUp) {
+    if (!loupeOn) return;
+    let node = null, off = 0;
+    if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); if (p) { node = p.offsetNode; off = p.offset; } }
+    else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (r) { node = r.startContainer; off = r.startOffset; } }
+    if (!node || node.nodeType !== 3 || !/[฀-๿]/.test(node.data)) return hideLoupe();
+    const t = node.data;
+    // le caret tombe entre deux lettres : on prend la lettre la plus proche du curseur
+    let i = Math.min(off, t.length - 1);
+    try {
+      const rg = document.createRange(); let best = 1e9, bi = i;
+      for (let k = Math.max(0, i - 2); k <= Math.min(t.length - 1, i + 1); k++) {
+        rg.setStart(node, k); rg.setEnd(node, k + 1);
+        const b = rg.getBoundingClientRect();
+        if (!b.width && !b.height) continue;
+        const d = (x < b.left ? b.left - x : x > b.right ? x - b.right : 0) + (y < b.top ? b.top - y : y > b.bottom ? y - b.bottom : 0);
+        if (d < best) { best = d; bi = k; }
+      }
+      i = bi;
+    } catch (e) {}
+    while (i > 0 && isMark(t[i])) i--;                    // remonte à la consonne de base
+    const cl = []; // groupes : consonne + signes qui l'accompagnent
+    let a = i; for (let n = 0; n < 2 && a > 0; n++) { a--; while (a > 0 && isMark(t[a])) a--; }
+    let k = a;
+    while (k < t.length && cl.length < 5 + (i - a > 0 ? 0 : 0)) {
+      let e = k + 1; while (e < t.length && isMark(t[e])) e++;
+      cl.push({ s: t.slice(k, e), hit: k === i }); k = e;
+      if (k > i && cl.length >= 4 && k - i > 6) break;
+    }
+    const box = document.getElementById("loupe");
+    box.innerHTML = cl.map(c => c.hit ? "<b>" + esc(c.s) + "</b>" : esc(c.s)).join("");
+    const W = 170;
+    box.style.display = "flex";
+    box.style.left = Math.max(4, Math.min(innerWidth - W - 4, x - W / 2)) + "px";
+    box.style.top = Math.max(4, y - W - (offsetUp || 18)) + "px";
+  }
+  document.addEventListener("mousemove", e => { if (loupeOn) loupeAt(e.clientX, e.clientY, 14); });
+  document.addEventListener("mouseleave", hideLoupe);
+  document.addEventListener("touchstart", e => { if (loupeOn && e.touches[0]) loupeAt(e.touches[0].clientX, e.touches[0].clientY, 40); }, { passive: true });
+  document.addEventListener("touchmove", e => { if (loupeOn && e.touches[0]) loupeAt(e.touches[0].clientX, e.touches[0].clientY, 40); }, { passive: true });
+  document.addEventListener("touchend", hideLoupe);
+  document.addEventListener("keydown", e => { if (e.key === "F4") { e.preventDefault(); toggleLoupe(); } });
+  document.addEventListener("DOMContentLoaded", () => document.getElementById("loupe-btn").classList.toggle("on", loupeOn));
   if (window.speechSynthesis) { ttsLoad(); speechSynthesis.onvoiceschanged = ttsLoad; }
   document.addEventListener("DOMContentLoaded", () => { ttsRefreshUI(); loadAudioIndex(); });
 
@@ -2238,5 +2299,7 @@ const ThaiTone = (() => {
     if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register("sw.js").catch(() => {});
   };
 </script>
+<button id="loupe-btn" onclick="toggleLoupe()" title="Loupe : survole ou touche un mot pour l'agrandir (touche F4)" aria-label="Loupe">🔍</button>
+<div id="loupe"></div>
 </body>
 </html>
