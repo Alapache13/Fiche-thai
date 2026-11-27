@@ -860,9 +860,10 @@ function hitText(page,x,y){const T=page.txt;if(!T||!T.length)return null;let bes
  const sg=lineSegs(page).find(g=>g.items.includes(best));return{word:wordAt(str,idx),line:(sg?sg.s:str).trim()}}
 function speakThai(text,rate,onStart){if(!("speechSynthesis" in window)){toast("Synthèse vocale indisponible",3000);return}
  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="th-TH";u.rate=rate;const v=speechSynthesis.getVoices().find(x=>/^th/i.test(x.lang));if(v)u.voice=v;if(onStart)u.onstart=onStart;speechSynthesis.speak(u)}
-async function speakAt(page,x,y){const h=hitText(page,x,y);if(!h){if(page.txt&&page.txt.length)toast("Aucun texte ici — touche directement un mot imprimé",2400);else{toast("Cette page n'a pas de texte sélectionnable : tape le mot",2600);speakBox("","")}return}speakBox(h.word,h.line)}
+async function speakAt(page,x,y){dlog("🔊 tap page ("+Math.round(x)+","+Math.round(y)+") texte:"+((page.txt&&page.txt.length)||0));let h;try{h=hitText(page,x,y)}catch(err){dlog("🔊 ERREUR repérage : "+err.message);toast("Erreur 🔊 (repérage) : "+err.message,6000);speakBox("","");return}dlog("🔊 mot: "+(h?h.word:"aucun"));if(!h){if(page.txt&&page.txt.length)toast("Aucun texte ici — touche directement un mot imprimé",2400);else{toast("Cette page n'a pas de texte sélectionnable : tape le mot",2600);speakBox("","")}return}speakBox(h.word,h.line)}
 async function copyText(inp){const t=inp.value;try{await navigator.clipboard.writeText(t);toast("📋 Texte copié",1600)}catch(_){try{inp.focus();inp.select();document.execCommand("copy");toast("📋 Texte copié",1600)}catch(e){toast("Copie impossible : sélectionne le texte et copie-le",3000)}}}
-function speakBox(word,line){modal("🔊 Écouter",(box,close)=>{const inp=el("textarea",{cls:"spk-inp",rows:"2",lang:"th",spellcheck:"false"});inp.value=word;
+function speakBox(word,line){try{speakBox2(word,line)}catch(err){dlog("🔊 ERREUR boîte : "+err.message);toast("Erreur 🔊 : "+err.message,6000)}}
+function speakBox2(word,line){modal("🔊 Écouter",(box,close)=>{const inp=el("textarea",{cls:"spk-inp",rows:"2",lang:"th",spellcheck:"false"});inp.value=word;
  let started=false;const play=(r,auto)=>{const t=inp.value.trim();if(!t){toast("Rien à lire",1500);return}started=false;speakThai(t,r,()=>{started=true;btn.classList.remove("pulse")});if(auto)setTimeout(()=>{if(!started){btn.classList.add("pulse");hint.textContent="Safari a bloqué la lecture automatique : touche ▶ Écouter."}},900)};
  const noVoice=("speechSynthesis" in window)&&speechSynthesis.getVoices().length&&!speechSynthesis.getVoices().some(v=>/^th/i.test(v.lang));
  const btn=el("button",{cls:"btn primary",text:"▶ Écouter",on:{click:()=>play(.85)}}),hint=el("p",{cls:"muted",text:noVoice?"⚠️ Aucune voix thaïe détectée sur cet appareil : Réglages iPad › Accessibilité › Contenu énoncé › Voix › Thaï.":"Tu peux corriger le texte avant de l'écouter."});
@@ -870,8 +871,8 @@ function speakBox(word,line){modal("🔊 Écouter",(box,close)=>{const inp=el("t
   hint,
   el("div",{cls:"actions"},el("button",{cls:"btn",text:"Fermer",on:{click:()=>{speechSynthesis.cancel();close(null)}}})));
  if(word)play(.85,true);else setTimeout(()=>inp.focus(),80)})}
-function speakInput(e){const page=curPage(),rect=paper.getBoundingClientRect(),z=S.zoom,x0=e.clientX,y0=e.clientY;let moved=false,t0=performance.now();
- return{move(ev){if(Math.hypot(ev.clientX-x0,ev.clientY-y0)>10)moved=true},end(ev,cancel){if(cancel||moved||performance.now()-t0>900)return;speakAt(page,(x0-rect.left)/z,(y0-rect.top)/z)}}}
+function speakInput(e){dlog("🔊 outil actif : appui");const page=curPage(),rect=paper.getBoundingClientRect(),z=S.zoom,x0=e.clientX,y0=e.clientY;let moved=false,t0=performance.now();
+ return{move(ev){if(Math.hypot(ev.clientX-x0,ev.clientY-y0)>10)moved=true},end(ev,cancel){dlog("🔊 fin d'appui cancel="+cancel+" déplacé="+moved);if(cancel||moved||performance.now()-t0>900)return;speakAt(page,(x0-rect.left)/z,(y0-rect.top)/z)}}}
 async function onExtractRect(page,r){try{const part=await makePart(page,r);
  if(S.linkTo){const x=findEx(S.linkTo);S.linkTo=null;showLinkBar(false);if(!x){await delAsset(part.img);return}
   x.parts.push({...part,role:"explication"});touchNb(nbOfEx(x));refreshMarkers();setTool(S.prevTool&&S.prevTool!=="extract"?S.prevTool:"pen");toast("Explication liée ✔",1600);openSheet(x.id);return}
