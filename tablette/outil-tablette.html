@@ -527,7 +527,7 @@ vp.addEventListener("pointermove",e=>{lastInputT=performance.now();if(e.pointerT
  if(input&&input.id===e.pointerId){if(e.pointerType!=="touch"&&e.buttons===0&&e.pressure===0){dlog("fin (survol sans appui)");DIAG.hover++;endPointer(e,false);return}e.preventDefault();input.move(e)}});
 function endPointer(e,cancel){lastInputT=performance.now();const had=ptrs.has(e.pointerId);ptrs.delete(e.pointerId);if(!had)return;
  let tapOpen=null;if(S.tapPin&&S.tapPin.id===e.pointerId){const tp=S.tapPin;S.tapPin=null;if(!cancel&&ptrs.size===0&&Math.hypot(e.clientX-tp.x,e.clientY-tp.y)<8&&performance.now()-tp.t<450)tapOpen=tp.el.dataset.x}
- if(S.tapSpk&&S.tapSpk.id===e.pointerId){const ts=S.tapSpk;S.tapSpk=null;if(!cancel&&ptrs.size===0&&Math.hypot(e.clientX-ts.x,e.clientY-ts.y)<8&&performance.now()-ts.t<450){const r=paper.getBoundingClientRect(),pg=curPage();if(pg)speakAt(pg,(e.clientX-r.left)/S.zoom,(e.clientY-r.top)/S.zoom)}}
+ if(S.tapSpk&&S.tapSpk.id===e.pointerId){const ts=S.tapSpk;S.tapSpk=null;if(!cancel&&ptrs.size===0&&Math.hypot(e.clientX-ts.x,e.clientY-ts.y)<30&&performance.now()-ts.t<6000){const r=paper.getBoundingClientRect(),pg=curPage();if(pg)speakAt(pg,(e.clientX-r.left)/S.zoom,(e.clientY-r.top)/S.zoom)}}
  if(tapOpen)setTimeout(()=>openSheet(tapOpen,true),0);
  if(input&&input.id===e.pointerId){const i=input;input=null;if(e.pointerType==="pen"){S.penDown=false;S.penUntil=performance.now()+800}i.end(e,cancel||!!tapOpen)}
  if(gesture){if(gesture.kind==="pan"&&gesture.id===e.pointerId){const g=gesture;gesture=null;if(!cancel&&Math.hypot(g.vx,g.vy)>.05)momentum(g.vx,g.vy)}
@@ -872,7 +872,7 @@ function speakBox2(word,line){modal("🔊 Écouter",(box,close)=>{const inp=el("
   el("div",{cls:"actions"},el("button",{cls:"btn",text:"Fermer",on:{click:()=>{speechSynthesis.cancel();close(null)}}})));
  if(word)play(.85,true);else setTimeout(()=>inp.focus(),80)})}
 function speakInput(e){dlog("🔊 outil actif : appui");const page=curPage(),rect=paper.getBoundingClientRect(),z=S.zoom,x0=e.clientX,y0=e.clientY;let moved=false,t0=performance.now();
- return{move(ev){if(Math.hypot(ev.clientX-x0,ev.clientY-y0)>10)moved=true},end(ev,cancel){dlog("🔊 fin d'appui cancel="+cancel+" déplacé="+moved);if(cancel||moved||performance.now()-t0>900)return;speakAt(page,(x0-rect.left)/z,(y0-rect.top)/z)}}}
+ return{move(ev){},end(ev,cancel){const d=Math.hypot((ev.clientX!=null?ev.clientX:x0)-x0,(ev.clientY!=null?ev.clientY:y0)-y0);dlog("🔊 fin d'appui cancel="+cancel+" écart="+Math.round(d)+"px durée="+Math.round(performance.now()-t0)+"ms");if(cancel||d>40)return;speakAt(page,(x0-rect.left)/z,(y0-rect.top)/z)}}}
 async function onExtractRect(page,r){try{const part=await makePart(page,r);
  if(S.linkTo){const x=findEx(S.linkTo);S.linkTo=null;showLinkBar(false);if(!x){await delAsset(part.img);return}
   x.parts.push({...part,role:"explication"});touchNb(nbOfEx(x));refreshMarkers();setTool(S.prevTool&&S.prevTool!=="extract"?S.prevTool:"pen");toast("Explication liée ✔",1600);openSheet(x.id);return}
