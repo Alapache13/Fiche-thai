@@ -33,6 +33,10 @@ main{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr);gap:12
 #sub.hidden-th{filter:blur(9px);cursor:pointer}
 #detail .big{font-size:32px;margin-bottom:6px}
 .entry{margin-top:10px;border-top:1px solid var(--border);padding-top:8px;font-size:15px;line-height:1.45}
+.entry summary{list-style:none;font-weight:400;padding:4px 0}
+.entry summary::-webkit-details-marker{display:none}
+.entry .more div{margin-top:8px}
+.entry .more em{color:var(--muted);font-size:13px}
 .badge{display:inline-block;font-size:11px;border-radius:8px;padding:2px 7px;color:#fff;margin-right:6px}
 .tabs{display:flex;gap:6px;margin-bottom:8px}
 #list{max-height:52vh;overflow:auto}

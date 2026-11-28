@@ -109,9 +109,48 @@ function analyze(text) {
   return out;
 }
 const tokensOf = c => c.tokens || (c.tokens = analyze(c.text));
+// Sens courts : mêmes règles que le constructeur.
+const GLOSS_LABEL = /^(?:Adjectif|Adverbe|Nom|Verbe|Pronom|Particule|Classificateur|Connecteur|Expression|Préposition|Conjonction|Marqueur|Quantificateur|Démonstratif|Négation)\b[^:]{0,40}:\s*/i;
+function glossItems(txt) {
+  let s = String(txt || "").trim().replace(/^\d+\)\s*/, "").replace(GLOSS_LABEL, "");
+  const cut = s.search(/\.(\s|$)|\s:\s|\sExemples?\s?:|\sEx\s?:|\s—\s|\sLittéralement|\sLittéral/);
+  if (cut > 0) s = s.slice(0, cut);
+  const noPar = s.replace(/\s*\([^)]*\)/g, "").trim();
+  if (noPar) s = noPar;
+  return s.split(/\s*[,;\/]\s*/).map(x => x.trim()).filter(Boolean);
+}
+
+function glossList(w) {
+  if (!w) return [""];
+  if (w.court && String(w.court).trim()) {
+    return String(w.court).split(/\s*\/\s*|\s*;\s*/).map(x => x.trim()).filter(Boolean).slice(0, 5);
+  }
+  const full = String(w.sens || "").trim();
+  let items;
+  if (/^\s*1\)/.test(full)) {
+    // sens numérotés (1) … 2) …) : tous les sens du premier, puis le premier de chacun des suivants
+    const parts = full.split(/\s*\b\d+\)\s+/).filter(x => x.trim());
+    const first = glossItems(parts[0]);
+    const others = parts.slice(1).map(p => glossItems(p)[0]).filter(Boolean);
+    items = first.slice(0, Math.max(1, 4 - others.length)).concat(others);
+  } else {
+    items = glossItems(full);
+  }
+  if (items.length === 0) items = [full];
+  return items.slice(0, 4).map(p => p.length > 40 ? p.slice(0, 40).replace(/\s+\S*$/, "") + "…" : p);
+}
+// Sous les sous-titres, un seul sens ; dans la fiche, trois au maximum.
+// Les parenthèses sont retirées d'abord : un « : » à l'intérieur coupait le sens en plein milieu.
+const glosses = e => glossList(Object.assign({}, e, { sens: String(e.sens || "").replace(/\s*\([^()]*\)/g, "") }));
 function shortSense(e) {
-  const s = String(e.court || e.sens || "").split(e.court ? /\s*[\/;]\s*/ : /[.,;(:]/)[0].trim();
-  return s.length > 32 ? s.slice(0, 32) + "…" : s;
+  const g = glosses(e)[0] || "";
+  return g.length > 32 ? g.slice(0, 32) + "…" : g;
+}
+function entryHTML(e, color) {
+  const short = glosses(e).slice(0, 3).join(" / ");
+  const more = [e.sens && e.sens.trim() !== short ? `<div>${esc(e.sens)}</div>` : "", e.note ? `<div><em>${esc(e.note)}</em></div>` : ""].filter(Boolean).join("");
+  const head = `<span class="badge" style="background:${esc(color || "#475569")}">${esc(e.cat)}</span><b>${esc(e.rom)}</b> : ${esc(short)}`;
+  return more ? `<div class="entry"><details><summary>${head} <span class="muted">▾ détail</span></summary><div class="more">${more}</div></details></div>` : `<div class="entry">${head}</div>`;
 }
 
 // ---------- Sous-titres ----------
@@ -267,8 +306,7 @@ function showWord(word, context) {
   selected = { word, context };
   const es = index.get(word), colors = (store.get("thai_grammar_config_v1", {}) || {}).CAT_COLORS || {};
   let h = `<div class="big" lang="th">${esc(word)}</div><div class="row"><button data-act="say">🔊 Écouter</button><button class="sec" data-act="slow">🐢 Lentement</button></div>`;
-  if (es) h += es.map(e => `<div class="entry"><span class="badge" style="background:${esc(colors[e.cat] || "#475569")}">${esc(e.cat)}</span><b>${esc(e.rom)}</b>${e.court ? " : " + esc(e.court) : ""}
-      <div style="margin-top:5px">${esc(e.sens)}</div>${e.note ? `<div class="muted" style="margin-top:5px"><em>${esc(e.note)}</em></div>` : ""}</div>`).join("");
+  if (es) h += es.map(e => entryHTML(e, colors[e.cat])).join("");
   else h += `<div class="entry"><p class="muted">Pas dans ton lexique, ou mal découpé. Tu peux corriger le mot avant de l'ajouter.</p>
       <div class="row" style="margin-top:8px"><input id="fix" lang="th" value="${esc(word)}" style="flex:1;min-width:140px;font-size:20px"><button data-act="add">➕ Ajouter à la liste</button><button class="sec" data-act="ignore">Ignorer (nom propre)</button></div></div>`;
   $("detail").innerHTML = h;
