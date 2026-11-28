@@ -231,7 +231,8 @@ function copyText(text, ok) {
 }
 
 // ---------- Voix : fichiers audio_thai du constructeur, puis voix de l'appareil, puis Google ----------
-const AUDIO_DIR = "../constructeur/audio_thai/";
+// Fonctionne que le dossier soit publié en « video/ » ou en « video-thai/video/ ».
+const AUDIO_DIR = new URL(location.pathname.replace(/(video-thai\/)?video\/[^\/]*$/, "constructeur/audio_thai/"), location.href).href;
 let voiceAudio = null, voices = [], voiceToken = 0;
 const loadVoices = () => voices = window.speechSynthesis ? speechSynthesis.getVoices().filter(v => /^th([-_]|$)/i.test(v.lang)) : [];
 if (window.speechSynthesis) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
@@ -312,8 +313,9 @@ function setCur(i) {
   const el = list.querySelector(`[data-cue="${i}"]`);
   if (el) { el.classList.add("cur"); list.scrollTop += el.getBoundingClientRect().top - list.getBoundingClientRect().top - list.clientHeight / 3; }
 }
+const needSubs = () => { toast("Il manque les sous-titres : colle la transcription dans « Sous-titres thaïs », puis « Utiliser ces sous-titres »."); $("subsbox").open = true; $("subsbox").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
 function goTo(i) {
-  if (!cues.length) return;
+  if (!cues.length) return needSubs();
   i = Math.max(0, Math.min(cues.length - 1, i));
   setCur(i);
   stopAt = i;
