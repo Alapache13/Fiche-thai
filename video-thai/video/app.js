@@ -151,7 +151,8 @@ function parseSubs(text) {
 
 // ---------- État et affichage ----------
 let cues = [], cur = -1, videoId = "", offset = 0, tab = "t", selected = null;
-const opts = Object.assign({ rom: false, sens: false, blur: false, autopause: false, loop: false }, store.get("thai_video_opts", {}));
+let tr = {}, summary = "";
+const opts = Object.assign({ rom: false, sens: false, blur: false, fr: true, autopause: false, loop: false }, store.get("thai_video_opts", {}));
 let unknown = store.get("thai_video_unknown", {}), ignored = new Set(store.get("thai_video_ignored", []));
 
 function wordsHTML(c, ci) {
@@ -163,20 +164,93 @@ function wordsHTML(c, ci) {
     return `<span class="w${cls}${sel}" data-c="${ci}" data-i="${i}">${esc(t.t)}<small class="r">${e ? esc(e.rom) : ""}</small><small class="s">${e ? esc(shortSense(e)) : ""}</small></span>`;
   }).join("");
 }
+// ---------- Traduction (copier-coller avec Claude) ----------
+const BATCH = 60;
+const cueKey = c => c.start + "|" + c.text;
+// Empreinte des sous-titres : évite d'importer la réponse d'une autre vidéo.
+function trCode() {
+  let h = 0x811c9dc5;
+  for (const ch of videoId + cues.map(cueKey).join("\n")) h = Math.imul(h ^ ch.codePointAt(0), 0x01000193) >>> 0;
+  return h.toString(36);
+}
+const missing = () => cues.map((c, i) => i).filter(i => !tr[cueKey(cues[i])]);
+function trHTML(c) {
+  const t = c && tr[cueKey(c)];
+  if (!opts.fr || !t) return "";
+  return `<span class="fr">${esc(t.fr)}</span>${t.doute ? `<span class="doubt">⚠️ ${esc(t.doute)}</span>` : ""}`;
+}
+function renderTrState() {
+  $("trbox").hidden = tab !== "t" || !cues.length;
+  const left = missing().length, done = cues.length - left;
+  $("trcopy").hidden = !left;
+  $("trcopy").textContent = left > BATCH || done ? `🌐 Copier la demande (${Math.min(BATCH, left)} phrases)` : "🌐 Copier la demande de traduction";
+  $("trstate").textContent = !cues.length ? "" : !left ? `✅ Les ${cues.length} lignes sont traduites.` : `${done} ligne(s) traduite(s) sur ${cues.length}.`;
+}
+function translatePrompt() {
+  const ids = missing().slice(0, BATCH);
+  const before = cues.slice(Math.max(0, ids[0] - 3), ids[0]).map(c => c.text).join("\n");
+  const p = raw("thai_profile_text_v1");
+  return `${p.trim() ? p : DEFAULT_PROFILE}
+
+DEMANDE : traduis en français ces sous-titres d'une vidéo YouTube thaïe.
+${summary ? `\nRésumé des passages déjà traduits : ${summary}\n` : ""}${before ? `\nLignes précédentes, pour le contexte (ne pas les traduire) :\n${before}\n` : ""}
+Lignes à traduire :
+${ids.map(i => `${i + 1}. ${cues[i].text}`).join("\n")}
+
+Réponds UNIQUEMENT avec un objet JSON dans un bloc de code (rien après) :
+{"code": "${trCode()}", "resume": "...", "phrases": [{"n": ${ids[0] + 1}, "fr": "...", "doute": ""}]}
+- resume : le sens général de la vidéo en 2 à 4 phrases${summary ? ", en complétant le résumé précédent" : ""}.
+- phrases : une entrée pour chaque ligne numérotée, avec le même numéro n.
+- fr : français naturel. Une phrase peut être coupée entre plusieurs lignes : comprends-la en entier, puis donne à chaque ligne la partie qui lui correspond.
+- doute : vide en général. Si la ligne semble mal transcrite ou ambiguë, explique-le brièvement au lieu d'inventer un sens.`;
+}
+function importTranslation(text) {
+  let d;
+  try { d = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)); } catch (e) { d = null; }
+  if (!d || !Array.isArray(d.phrases)) return toast("Réponse non reconnue. Copie tout le bloc de code de la réponse, ou demande-la à nouveau si elle est incomplète.");
+  if (d.code !== trCode()) return toast("Cette réponse correspond à une autre vidéo ou à d'autres sous-titres.");
+  let n = 0;
+  d.phrases.forEach(x => { const c = x && cues[x.n - 1]; if (c && typeof x.fr === "string" && x.fr.trim()) { tr[cueKey(c)] = { fr: x.fr.trim(), doute: String(x.doute || "").trim() }; n++; } });
+  if (!n) return toast("Aucune phrase traduite dans cette réponse.");
+  if (typeof d.resume === "string" && d.resume.trim()) summary = d.resume.trim();
+  opts.fr = true; store.set("thai_video_opts", opts);
+  $("transwer").value = ""; $("trmanual").hidden = true;
+  toast(`${n} ligne(s) traduite(s).` + (missing().length ? ` Il en reste ${missing().length}.` : ""));
+  saveVideo(); toggleBtns(); renderSub(); renderList(); $("list").scrollTop = 0;
+}
+function explainPrompt() {
+  const c = cues[cur], p = raw("thai_profile_text_v1");
+  const around = cues.slice(Math.max(0, cur - 2), cur + 3).map(x => x.text).join("\n");
+  return `${p.trim() ? p : DEFAULT_PROFILE}
+
+DEMANDE : explique-moi cette ligne d'une vidéo YouTube thaïe.
+Ligne : ${c.text}
+
+Contexte (lignes autour) :
+${around}
+
+Réponds en trois parties courtes :
+1. Sens naturel en français.
+2. Mot à mot avec romanisation.
+3. La structure grammaticale et ce qui est difficile. Signale une éventuelle erreur de sous-titrage.`;
+}
+
 function renderSub() {
   const el = $("sub");
   el.className = (opts.rom ? "show-rom " : "") + (opts.sens ? "show-sens " : "") + (opts.blur ? "hidden-th" : "");
   if (!cues.length) el.innerHTML = '<span class="muted">Ajoute les sous-titres thaïs ci-dessous.</span>';
   else el.innerHTML = cur >= 0 ? wordsHTML(cues[cur], cur) : '<span class="muted">▶ Lance la vidéo ou choisis une phrase.</span>';
+  $("trans").innerHTML = cur >= 0 ? trHTML(cues[cur]) : "";
 }
 function renderList() {
   $("nunk").textContent = Object.keys(unknown).length;
   $("tab-t").className = tab === "t" ? "on" : "sec"; $("tab-u").className = tab === "u" ? "on" : "sec";
   const el = $("list");
+  renderTrState();
   if (tab === "t") {
-    el.innerHTML = cues.length ? cues.map((c, i) => {
+    el.innerHTML = cues.length ? (summary && opts.fr ? `<div id="summary"><b>Sens général</b><br>${esc(summary)}</div>` : "") + cues.map((c, i) => {
       const s = Math.floor(c.start);
-      return `<div class="cue${i === cur ? " cur" : ""}" data-cue="${i}"><time>${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}</time><span lang="th">${esc(c.text)}</span></div>`;
+      return `<div class="cue${i === cur ? " cur" : ""}" data-cue="${i}"><time>${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}</time><div><span lang="th">${esc(c.text)}</span>${trHTML(c)}</div></div>`;
     }).join("") : '<p class="muted">La transcription apparaîtra ici.</p>';
     return;
   }
@@ -279,13 +353,14 @@ function youTubeAPI() {
 }
 function saveVideo() {
   if (!videoId) return;
-  if (!store.set("thai_video_v_" + videoId, { subs: $("subs").value, offset })) toast("Mémoire du navigateur pleine : ces sous-titres ne seront pas gardés.");
+  if (!store.set("thai_video_v_" + videoId, { subs: $("subs").value, offset, tr, summary })) toast("Mémoire du navigateur pleine : ces sous-titres ne seront pas gardés.");
   store.set("thai_video_last", videoId);
 }
 async function loadVideo(id) {
   videoId = id; stopAt = null;
   const saved = store.get("thai_video_v_" + id, null);
   $("subs").value = saved ? saved.subs : ""; offset = saved ? saved.offset : 0;
+  tr = (saved && saved.tr) || {}; summary = (saved && saved.summary) || ""; $("transwer").value = ""; $("trmanual").hidden = true;
   applySubs(false); store.set("thai_video_last", id);
   try { await youTubeAPI(); } catch (e) { toast("YouTube est inaccessible. Vérifie la connexion."); return; }
   if (player) { player.cueVideoById(id); return; }
@@ -343,10 +418,10 @@ setInterval(tick, 100);
 
 // ---------- Commandes ----------
 function toggleBtns() {
-  [["t-rom", "rom"], ["t-sens", "sens"], ["t-blur", "blur"], ["autopause", "autopause"], ["loop", "loop"]].forEach(([id, k]) => { $(id).className = opts[k] ? "on" : "sec"; $(id).setAttribute("aria-pressed", opts[k]); });
+  [["t-rom", "rom"], ["t-sens", "sens"], ["t-blur", "blur"], ["t-fr", "fr"], ["autopause", "autopause"], ["loop", "loop"]].forEach(([id, k]) => { $(id).className = opts[k] ? "on" : "sec"; $(id).setAttribute("aria-pressed", opts[k]); });
 }
-[["t-rom", "rom"], ["t-sens", "sens"], ["t-blur", "blur"], ["autopause", "autopause"], ["loop", "loop"]].forEach(([id, k]) => $(id).onclick = () => {
-  opts[k] = !opts[k]; store.set("thai_video_opts", opts); toggleBtns(); renderSub();
+[["t-rom", "rom"], ["t-sens", "sens"], ["t-blur", "blur"], ["t-fr", "fr"], ["autopause", "autopause"], ["loop", "loop"]].forEach(([id, k]) => $(id).onclick = () => {
+  opts[k] = !opts[k]; store.set("thai_video_opts", opts); toggleBtns(); renderSub(); if (k === "fr") renderList();
 });
 $("load").onclick = () => { const id = parseId($("url").value); id ? loadVideo(id) : toast("Je ne reconnais pas ce lien YouTube."); };
 $("url").onkeydown = e => { if (e.key === "Enter") $("load").click(); };
@@ -360,6 +435,21 @@ $("play").onclick = () => { if (!ready) return; if (player.getPlayerState() === 
 $("speed").onchange = () => ready && player.setPlaybackRate(+$("speed").value);
 const shift = d => { offset = Math.round((offset + d) * 10) / 10; $("offset").textContent = offset.toLocaleString("fr") + " s"; saveVideo(); };
 $("om").onclick = () => shift(-0.5); $("op").onclick = () => shift(0.5);
+$("trcopy").onclick = () => copyText(translatePrompt(), "Demande copiée. Colle-la dans Claude, puis reviens avec « Coller la réponse ».");
+// Le presse-papiers peut être refusé (surtout sur tablette) : une zone de collage reste alors disponible.
+$("trpaste").onclick = async () => {
+  let t = "";
+  try { t = await navigator.clipboard.readText(); } catch (e) {}
+  if (t.includes('"phrases"')) importTranslation(t);
+  else { $("trmanual").hidden = false; $("transwer").focus(); }
+};
+$("trimport").onclick = () => importTranslation($("transwer").value);
+$("explain").onclick = () => {
+  if (!cues.length) return needSubs();
+  if (cur < 0) return toast("Choisis d'abord une phrase.");
+  if (ready) player.pauseVideo();
+  copyText(explainPrompt(), "Demande copiée. Colle-la dans Claude.");
+};
 $("tab-t").onclick = () => { tab = "t"; renderList(); };
 $("tab-u").onclick = () => { tab = "u"; renderList(); };
 $("sub").onclick = e => {
