@@ -49,6 +49,12 @@ summary{cursor:pointer;font-weight:700}
 .fr{display:block;font-size:14px;color:#bae6fd;line-height:1.4}
 .doubt{display:block;font-size:12px;color:#fbbf24;line-height:1.35}
 #summary{border:1px solid #7c3aed;border-radius:8px;padding:9px;margin-bottom:8px;font-size:14px;line-height:1.5}
+[hidden]{display:none!important}
+#libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.vid{margin:0;display:flex;flex-direction:column;gap:8px}
+.vid img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:#000;cursor:pointer}
+.vid b{font-size:15px;line-height:1.35;overflow-wrap:anywhere}
+.vid .row{margin-top:auto}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--accent);color:#000;padding:10px 16px;border-radius:8px;font-weight:700;display:none;max-width:92%;z-index:9}
 </style>
 </head>
@@ -57,11 +63,24 @@ summary{cursor:pointer;font-weight:700}
   <h1>🎬 Vidéo thaï</h1>
   <input id="url" placeholder="Colle ici le lien d'une vidéo YouTube">
   <button id="load">Charger la vidéo</button>
+  <button class="sec" id="openlib">📚 Mes vidéos</button>
 </header>
 <div class="row" style="margin-bottom:10px">
   <span class="muted" id="lexstate">Lecture du lexique…</span>
   <label class="btn sec">➕ Charger des fichiers lexique<input type="file" id="lexfiles" multiple accept=".js,.json" hidden></label>
 </div>
+<section id="lib" hidden>
+  <div class="card">
+    <div class="row">
+      <input id="libsearch" type="search" placeholder="🔍 Chercher un titre" style="flex:1;min-width:180px">
+      <button class="sec" id="libexport">💾 Exporter ma bibliothèque</button>
+      <label class="btn sec">📂 Importer<input type="file" id="libimport" accept=".json" hidden></label>
+      <button id="libclose">✕ Fermer</button>
+    </div>
+    <p class="muted" id="libstate" style="margin-top:8px"></p>
+  </div>
+  <div id="libgrid"></div>
+</section>
 <main>
   <section>
     <div id="player-box"><span class="muted">La vidéo s'affichera ici.</span></div>

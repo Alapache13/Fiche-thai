@@ -151,7 +151,7 @@ function parseSubs(text) {
 
 // ---------- État et affichage ----------
 let cues = [], cur = -1, videoId = "", offset = 0, tab = "t", selected = null;
-let tr = {}, summary = "";
+let tr = {}, summary = "", title = "", renamed = false, appliedSubs = "";
 const opts = Object.assign({ rom: false, sens: false, blur: false, fr: true, autopause: false, loop: false }, store.get("thai_video_opts", {}));
 let unknown = store.get("thai_video_unknown", {}), ignored = new Set(store.get("thai_video_ignored", []));
 
@@ -351,17 +351,56 @@ function youTubeAPI() {
     document.head.appendChild(s);
   });
 }
+// ---------- Bibliothèque : une fiche par vidéo dans la base propre à ce lecteur ----------
+const vKey = id => "video:" + id;
+const getVideo = id => ownDB("readonly", s => s.get(vKey(id)));
+const putVideo = v => ownDB("readwrite", s => s.put(v, vKey(v.id)));
+const allVideos = () => ownDB("readonly", s => s.getAll(IDBKeyRange.bound("video:", "video:\uffff")));
 function saveVideo() {
-  if (!videoId) return;
-  if (!store.set("thai_video_v_" + videoId, { subs: $("subs").value, offset, tr, summary })) toast("Mémoire du navigateur pleine : ces sous-titres ne seront pas gardés.");
+  if (!videoId || !cues.length) return;
+  const rec = { id: videoId, title, renamed, subs: appliedSubs, offset, tr, summary, total: cues.length, done: cues.length - missing().length, updated: Date.now() };
   store.set("thai_video_last", videoId);
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  return putVideo(rec).catch(() => toast("Enregistrement impossible : ce navigateur refuse le stockage (navigation privée ou disque plein ?)."));
 }
+// Reprend les vidéos enregistrées par la version précédente ; l'ancienne copie n'est effacée qu'après écriture.
+async function migrate() {
+  let keys = [];
+  try { keys = Object.keys(localStorage).filter(k => k.startsWith("thai_video_v_")); } catch (e) {}
+  for (const k of keys) {
+    const id = k.slice("thai_video_v_".length), old = store.get(k, null);
+    try {
+      if (old && old.subs && !(await getVideo(id))) {
+        const list = parseSubs(old.subs), t = old.tr || {};
+        await putVideo({ id, title: "", renamed: false, subs: old.subs, offset: old.offset || 0, tr: t, summary: old.summary || "", total: list.length, done: list.filter(c => t[cueKey(c)]).length, updated: Date.now() });
+      }
+      localStorage.removeItem(k);
+    } catch (e) {}
+  }
+}
+// YouTube ne donne le titre qu'une fois la vidéo prête.
+function fetchTitle() {
+  if (!ready || title || !player.getVideoData) return;
+  const d = player.getVideoData();
+  if (d && d.video_id === videoId && d.title) { title = d.title; saveVideo(); }
+}
+let loadToken = 0;
 async function loadVideo(id) {
+  const my = ++loadToken;
+  let saved = null;
+  try { saved = await getVideo(id); } catch (e) { toast("La bibliothèque est illisible dans ce navigateur."); }
+  if (my !== loadToken) return;
+  // Sous-titres collés avant d'avoir chargé une vidéo : on les garde pour elle.
+  const keep = !saved && !videoId && cues.length;
   videoId = id; stopAt = null;
-  const saved = store.get("thai_video_v_" + id, null);
-  $("subs").value = saved ? saved.subs : ""; offset = saved ? saved.offset : 0;
-  tr = (saved && saved.tr) || {}; summary = (saved && saved.summary) || ""; $("transwer").value = ""; $("trmanual").hidden = true;
+  title = (saved && saved.title) || ""; renamed = !!(saved && saved.renamed);
+  if (!keep) {
+    $("subs").value = saved ? saved.subs : ""; offset = saved ? saved.offset : 0;
+    tr = (saved && saved.tr) || {}; summary = (saved && saved.summary) || "";
+  }
+  $("transwer").value = ""; $("trmanual").hidden = true;
   applySubs(false); store.set("thai_video_last", id);
+  if (keep) saveVideo();
   try { await youTubeAPI(); } catch (e) { toast("YouTube est inaccessible. Vérifie la connexion."); return; }
   if (player) { player.cueVideoById(id); return; }
   $("player-box").innerHTML = '<div id="yt"></div>';
@@ -374,7 +413,8 @@ async function loadVideo(id) {
   });
 }
 function applySubs(announce) {
-  cues = parseSubs($("subs").value); cur = -1; stopAt = null;
+  appliedSubs = $("subs").value;
+  cues = parseSubs(appliedSubs); cur = -1; stopAt = null;
   $("offset").textContent = offset.toLocaleString("fr") + " s";
   $("subsbox").open = !cues.length;
   renderSub(); renderList();
@@ -397,6 +437,7 @@ function goTo(i) {
   if (ready) { player.seekTo(Math.max(0, cues[i].start + offset), true); player.playVideo(); }
 }
 function tick() {
+  fetchTitle();
   if (!ready || !cues.length || !player.getCurrentTime) return;
   const t = player.getCurrentTime() - offset, playing = player.getPlayerState() === 1;
   // Fin de la phrase suivie : pause ou boucle.
@@ -416,6 +457,88 @@ function tick() {
 }
 setInterval(tick, 100);
 
+// ---------- Page « Mes vidéos » ----------
+let library = [];
+const plain = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const nameOf = v => v.title || "Vidéo " + v.id;
+async function openLibrary() {
+  if (ready) player.pauseVideo();
+  try { library = (await allVideos()).sort((a, b) => b.updated - a.updated); }
+  catch (e) { return toast("La bibliothèque est illisible dans ce navigateur."); }
+  $("lib").hidden = false; document.querySelector("main").hidden = true;
+  renderLibrary();
+}
+function closeLibrary() { $("lib").hidden = true; document.querySelector("main").hidden = false; }
+function renderLibrary() {
+  const q = plain($("libsearch").value), list = library.filter(v => plain(nameOf(v)).includes(q));
+  $("libstate").textContent = library.length ? `${library.length} vidéo(s) enregistrée(s) sur cet appareil. Exporte de temps en temps pour garder une copie de secours.` : "Aucune vidéo enregistrée. Charge une vidéo et ses sous-titres : elle apparaîtra ici.";
+  $("libgrid").innerHTML = list.map(v => `<div class="card vid" data-id="${esc(v.id)}">
+    <img src="https://i.ytimg.com/vi/${encodeURIComponent(v.id)}/mqdefault.jpg" alt="" loading="lazy" data-do="open">
+    <b>${esc(nameOf(v))}</b>
+    <span class="muted">Traduction : ${v.done || 0} / ${v.total || 0} lignes<br>Modifiée le ${new Date(v.updated).toLocaleDateString("fr-CH")}</span>
+    <div class="row"><button data-do="open">▶ Ouvrir</button><button class="sec" data-do="rename">✏️ Renommer</button><button class="sec" data-do="delete" aria-label="Supprimer">🗑️</button></div>
+  </div>`).join("");
+}
+$("libgrid").onclick = async e => {
+  const what = e.target.closest("[data-do]")?.dataset.do; if (!what) return;
+  const v = library.find(x => x.id === e.target.closest("[data-id]").dataset.id); if (!v) return;
+  if (what === "open") { closeLibrary(); $("url").value = "https://www.youtube.com/watch?v=" + v.id; return loadVideo(v.id); }
+  if (what === "rename") {
+    const n = prompt("Nouveau titre :", nameOf(v)); if (!n || !n.trim()) return;
+    v.title = n.trim(); v.renamed = true;
+    if (v.id === videoId) { title = v.title; renamed = true; }
+    await putVideo(v); renderLibrary();
+  }
+  if (what === "delete" && confirm(`Supprimer « ${nameOf(v)} » avec ses sous-titres et ses traductions ?`)) {
+    await ownDB("readwrite", s => s.delete(vKey(v.id)));
+    library = library.filter(x => x.id !== v.id);
+    if (v.id === videoId) { $("subs").value = ""; tr = {}; summary = ""; offset = 0; applySubs(false); }
+    if (store.get("thai_video_last", "") === v.id) store.set("thai_video_last", "");
+    renderLibrary();
+  }
+};
+async function exportLibrary() {
+  const videos = await allVideos();
+  if (!videos.length) return toast("Rien à exporter pour l'instant.");
+  const data = { app: "thai_video", version: 1, exportedAt: new Date().toISOString(), videos, unknown, ignored: [...ignored] };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: "application/json" }));
+  a.download = "videos_thai_" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast(`${videos.length} vidéo(s) exportée(s) dans tes téléchargements.`);
+}
+// Fusionne sans rien effacer : la version la plus récente l'emporte, les traductions des deux sont réunies.
+async function importLibrary(file) {
+  let d;
+  try { d = JSON.parse(await file.text()); } catch (e) { d = null; }
+  if (!d || d.app !== "thai_video" || !Array.isArray(d.videos)) return toast("Ce fichier n'est pas un export de « Mes vidéos ».");
+  let added = 0, merged = 0;
+  try {
+    for (const v of d.videos) {
+      if (!v || !/^[\w-]{11}$/.test(v.id) || typeof v.subs !== "string") continue;
+      const old = await getVideo(v.id);
+      const [first, last] = old && old.updated > v.updated ? [v, old] : [old, v];
+      const rec = Object.assign({}, first, last, { tr: Object.assign({}, first && first.tr, last.tr) });
+      rec.title = last.title || (first && first.title) || "";
+      rec.summary = last.summary || (first && first.summary) || "";
+      const list = parseSubs(rec.subs);
+      rec.total = list.length; rec.done = list.filter(c => rec.tr[cueKey(c)]).length;
+      await putVideo(rec); old ? merged++ : added++;
+    }
+  } catch (e) { return toast("L'import s'est interrompu : le navigateur refuse l'enregistrement."); }
+  unknown = Object.assign({}, d.unknown, unknown); (d.ignored || []).forEach(w => ignored.add(w));
+  store.set("thai_video_ignored", [...ignored]); pruneUnknown(); renderList();
+  if (videoId && d.videos.some(v => v && v.id === videoId)) await loadVideo(videoId);
+  await openLibrary();
+  toast(`${added} vidéo(s) ajoutée(s), ${merged} fusionnée(s).`);
+}
+$("openlib").onclick = () => $("lib").hidden ? openLibrary() : closeLibrary();
+$("libclose").onclick = closeLibrary;
+$("libsearch").oninput = renderLibrary;
+$("libexport").onclick = () => exportLibrary().catch(() => toast("Export impossible dans ce navigateur."));
+$("libimport").onchange = async e => { const f = e.target.files[0]; if (f) await importLibrary(f); e.target.value = ""; };
+
 // ---------- Commandes ----------
 function toggleBtns() {
   [["t-rom", "rom"], ["t-sens", "sens"], ["t-blur", "blur"], ["t-fr", "fr"], ["autopause", "autopause"], ["loop", "loop"]].forEach(([id, k]) => { $(id).className = opts[k] ? "on" : "sec"; $(id).setAttribute("aria-pressed", opts[k]); });
@@ -423,7 +546,7 @@ function toggleBtns() {
 [["t-rom", "rom"], ["t-sens", "sens"], ["t-blur", "blur"], ["t-fr", "fr"], ["autopause", "autopause"], ["loop", "loop"]].forEach(([id, k]) => $(id).onclick = () => {
   opts[k] = !opts[k]; store.set("thai_video_opts", opts); toggleBtns(); renderSub(); if (k === "fr") renderList();
 });
-$("load").onclick = () => { const id = parseId($("url").value); id ? loadVideo(id) : toast("Je ne reconnais pas ce lien YouTube."); };
+$("load").onclick = () => { const id = parseId($("url").value); if (id) closeLibrary(); id ? loadVideo(id) : toast("Je ne reconnais pas ce lien YouTube."); };
 $("url").onkeydown = e => { if (e.key === "Enter") $("load").click(); };
 $("apply").onclick = () => { applySubs(true); if (cues.length) saveVideo(); };
 $("subfile").onchange = async e => { const f = e.target.files[0]; if (f) { $("subs").value = await f.text(); $("apply").click(); } e.target.value = ""; };
@@ -479,7 +602,7 @@ $("detail").onclick = e => {
   if (act === "ignore") { ignored.add(word); store.set("thai_video_ignored", [...ignored]); delete unknown[word]; saveUnknown(); renderSub(); renderList(); toast("Ce mot ne sera plus souligné."); }
 };
 document.addEventListener("keydown", e => {
-  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!$("lib").hidden || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
   const id = { a: "prev", s: "replay", d: "next", " ": "play" }[e.key.toLowerCase()];
   if (id) { e.preventDefault(); $(id).click(); }
 });
@@ -487,7 +610,7 @@ document.addEventListener("keydown", e => {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) loadLexicon(); });
 
 toggleBtns(); renderSub(); renderList();
-loadLexicon().then(() => {
+loadLexicon().then(migrate).then(() => {
   const last = store.get("thai_video_last", "");
   if (last) { $("url").value = "https://www.youtube.com/watch?v=" + last; loadVideo(last); }
 });
